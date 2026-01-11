@@ -3,9 +3,9 @@
 
 :root {
   /* Light Theme */
-  --bg-image: url('/bg-light.png');
-  /* Light Grey overlay (Slate-200) to reduce brightness/glare ("too white") */
-  --bg-overlay: linear-gradient(135deg, rgba(226, 232, 240, 0.92) 0%, rgba(203, 213, 225, 0.92) 100%);
+  --bg-image: url('/bg-light-designed.png');
+  /* Transparent overlay to allow the designed background to shine through, with slight tint */
+  --bg-overlay: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(240, 249, 255, 0.4) 100%);
   --card-bg: rgba(255, 255, 255, 0.85);
   --text-primary: #1e293b;
   --text-secondary: #64748b;
