@@ -1,0 +1,323 @@
+import { useEffect, useState } from "react";
+import Layout from "../../components/Layout";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { Calendar, Pill, FileText } from "lucide-react";
+
+export default function PatientDashboard() {
+    const { user } = useAuth();
+
+    const [patientInfo, setPatientInfo] = useState(null);
+    const [hospitalInfo, setHospitalInfo] = useState(null);
+
+    const [appointments, setAppointments] = useState([]);
+    const [bills, setBills] = useState([]);
+    const [medicines, setMedicines] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showBookingModal, setShowBookingModal] = useState(false);
+    const [bookingDoctors, setBookingDoctors] = useState([]);
+    const [newBooking, setNewBooking] = useState({ doctor_id: "", appointment_date: new Date().toISOString().split('T')[0] });
+
+    const fetchClientData = async (showLoading = true) => {
+        if (showLoading) setLoading(true);
+        try {
+            // 0. Fetch patient info
+            const { data: pData } = await supabase.from('patients').select('*').eq('id', user.id).single();
+            if (pData) setPatientInfo(pData);
+
+            // 0.5 Fetch Hospital Info
+            const { data: hData } = await supabase.from('hospital_settings').select('*').single();
+            if (hData) setHospitalInfo(hData);
+
+            // 1. Fetch appointments
+            const { data: appData } = await supabase
+                .from('appointments')
+                .select(`*, doctors(name)`)
+                .eq('patient_id', user.id)
+                .order('appointment_date', { ascending: false })
+                .limit(5);
+            if (appData) setAppointments(appData);
+
+            // 2. Fetch bills
+            const { data: billData } = await supabase
+                .from('bills')
+                .select('*')
+                .eq('patient_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(5);
+            if (billData) setBills(billData);
+
+            // 3. Fetch prescriptions (Try-catch for safety)
+            try {
+                const { data: prescData } = await supabase
+                    .from('prescriptions')
+                    .select(`*, doctors(name), prescription_items(*, medicines(medicine_name))`)
+                    .eq('patient_id', user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                if (prescData) setMedicines(prescData);
+            } catch (err) { console.warn("Prescriptions fetch error", err); }
+
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (user) {
+            fetchClientData();
+
+            // Realtime subscriptions
+            const appSub = supabase
+                .channel('patient_updates')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `patient_id=eq.${user.id}` }, (payload) => {
+                    console.log("Appointment Update:", payload);
+                    fetchClientData(false);
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'prescriptions', filter: `patient_id=eq.${user.id}` }, (payload) => {
+                    console.log("Prescription Update:", payload);
+                    fetchClientData(false);
+                })
+                .subscribe((status) => {
+                    console.log("Realtime Status:", status);
+                });
+
+            return () => {
+                appSub.unsubscribe();
+            };
+        }
+    }, [user]);
+
+    useEffect(() => {
+        if (showBookingModal && bookingDoctors.length === 0) {
+            fetchDoctorsForBooking();
+        }
+    }, [showBookingModal]);
+
+    const fetchDoctorsForBooking = async () => {
+        const { data } = await supabase.from('profiles').select('id, name, specialization').eq('role', 'doctor');
+        if (data) {
+            setBookingDoctors(data);
+            if (data.length > 0 && !newBooking.doctor_id) {
+                setNewBooking(prev => ({ ...prev, doctor_id: data[0].id }));
+            }
+        }
+    };
+
+    const handleBookAppointment = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const { error } = await supabase.from('appointments').insert({
+                patient_id: user.id,
+                doctor_id: newBooking.doctor_id,
+                appointment_date: newBooking.appointment_date,
+                status: 'scheduled'
+            });
+
+            if (error) throw error;
+            alert("Appointment Booked Successfully!");
+            setShowBookingModal(false);
+            fetchClientData(); // Refresh list
+        } catch (err) {
+            alert("Error booking appointment: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Layout title="My Patient Portal">
+            <div className="space-y-8 pt-4">
+                <div className="mb-8">
+                    <h2 className="text-3xl font-black opacity-80 text-gray-900 dark:text-white">Hello, {patientInfo?.name || 'Patient'}! 👋</h2>
+                    <p className="text-sm opacity-50 mt-1 text-gray-400">View your medical records and appointments</p>
+                </div>
+
+                {/* Hospital Info Card */}
+                {hospitalInfo && (
+                    <div className="glass-card p-8 rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-500/20 dark:to-blue-500/20 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-32 bg-blue-500/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                        <div className="relative z-10">
+                            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-300 mb-2">{hospitalInfo.hospital_name || "Hospital Name"}</h3>
+                            <div className="flex flex-col md:flex-row gap-6 mt-4 text-gray-600 dark:text-gray-300">
+                                <div className="flex items-start gap-2">
+                                    <span className="opacity-50">📍</span>
+                                    <p className="max-w-xs">{hospitalInfo.address || "Address not available"}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="opacity-50">📞</span>
+                                    <p className="font-bold">{hospitalInfo.contact_number || "Contact not available"}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Appointments Card */}
+                    <div className="glass-card p-8 rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                                <Calendar className="text-blue-600 dark:text-blue-500" />
+                                Appointments
+                            </h3>
+                            <button
+                                onClick={() => setShowBookingModal(true)}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+                            >
+                                + Book New
+                            </button>
+                        </div>
+
+                        {loading ? <p className="opacity-40 italic text-gray-400">Loading...</p> :
+                            appointments.length > 0 ? (
+                                <div className="space-y-4">
+                                    {appointments.map(app => (
+                                        <div key={app.id} className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
+                                            <div>
+                                                <p className="font-bold text-gray-900 dark:text-white">Dr. {app.doctors?.name || "Consultant"}</p>
+                                                <p className="text-sm opacity-60 text-gray-500 dark:text-gray-400">{new Date(app.appointment_date).toLocaleDateString()}</p>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${app.status === 'completed' ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'}`}>
+                                                {app.status}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="opacity-40 text-gray-500 dark:text-gray-400">No appointments recorded.</p>
+                            )
+                        }
+                    </div>
+
+                    {/* Bills Card */}
+                    <div className="glass-card p-8 rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5">
+                        <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-gray-900 dark:text-white">
+                            <FileText className="text-orange-500" />
+                            Recent Invoices
+                        </h3>
+                        {loading ? <p className="opacity-40 italic text-gray-400">Loading...</p> :
+                            bills.length > 0 ? (
+                                <div className="space-y-4">
+                                    {bills.map(bill => (
+                                        <div key={bill.id} className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
+                                            <div>
+                                                <p className="font-black text-lg text-gray-900 dark:text-white">₹{bill.total_amount?.toLocaleString()}</p>
+                                                <p className="text-xs opacity-60 text-gray-500 dark:text-gray-400">{new Date(bill.created_at).toLocaleDateString()}</p>
+                                            </div>
+                                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/20 px-3 py-1 rounded-lg uppercase">
+                                                {bill.status}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="opacity-40 text-gray-500 dark:text-gray-400">No bills found.</p>
+                            )
+                        }
+                    </div>
+                </div>
+
+                {/* Medicines */}
+                <div className="glass-card p-8 rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5">
+                    <h3 className="text-xl font-bold flex items-center gap-2 mb-6 text-gray-900 dark:text-white">
+                        <Pill className="text-emerald-600 dark:text-emerald-500" />
+                        Prescribed Medicines
+                    </h3>
+                    {loading ? <p className="opacity-40 italic text-gray-400">Loading...</p> :
+                        medicines.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {medicines.map(group => (
+                                    <div key={group.id} className="p-6 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-2xl hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all flex flex-col h-full">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">
+                                                    Dr. {group.doctors?.name || "Consultant"}
+                                                </p>
+                                                <p className="text-xs opacity-60 text-gray-500">{new Date(group.created_at).toLocaleDateString()}</p>
+                                            </div>
+                                            <span className="bg-white/50 dark:bg-black/20 p-2 rounded-lg text-emerald-600 dark:text-emerald-400">
+                                                <Pill size={16} />
+                                            </span>
+                                        </div>
+
+                                        {group.notes && (
+                                            <div className="mb-4 bg-white/50 dark:bg-black/10 p-2 rounded-lg">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 italic">"{group.notes}"</p>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-2 mt-auto">
+                                            {group.prescription_items?.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-sm border-b border-emerald-200/50 dark:border-white/5 last:border-0 pb-1 last:pb-0">
+                                                    <span className="font-bold text-gray-800 dark:text-gray-200">{item.medicines?.medicine_name}</span>
+                                                    <span className="text-emerald-600 dark:text-emerald-400 font-mono">x{item.quantity}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="opacity-40 text-gray-500 dark:text-gray-400">No active prescriptions shown. Consult your doctor.</p>
+                        )
+                    }
+                </div>
+
+                {/* Booking Modal */}
+                {showBookingModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                        <div className="glass-card w-full max-w-md p-8 rounded-3xl border border-gray-200 dark:border-white/10 shadow-2xl relative bg-white dark:bg-gray-900">
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-6">Book Appointment</h3>
+
+                            <form onSubmit={handleBookAppointment} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold opacity-60 mb-2 uppercase tracking-widest text-gray-500 dark:text-gray-400">Select Doctor</label>
+                                    <select
+                                        required
+                                        className="w-full p-4 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+                                        style={{ colorScheme: 'light dark' }}
+                                        value={newBooking.doctor_id}
+                                        onChange={e => setNewBooking({ ...newBooking, doctor_id: e.target.value })}
+                                    >
+                                        {bookingDoctors.map(doc => (
+                                            <option key={doc.id} value={doc.id}>Dr. {doc.name} ({doc.specialization || 'General'})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold opacity-60 mb-2 uppercase tracking-widest text-gray-500 dark:text-gray-400">Date</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        className="w-full p-4 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+                                        value={newBooking.appointment_date}
+                                        onChange={e => setNewBooking({ ...newBooking, appointment_date: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex gap-4 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowBookingModal(false)}
+                                        className="flex-1 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                                    >
+                                        Confirm
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Layout>
+    );
+}

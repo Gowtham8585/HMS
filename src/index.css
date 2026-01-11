@@ -1,0 +1,102 @@
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Light Theme */
+  --bg-image: url('/bg-light.png');
+  /* Light Grey overlay (Slate-200) to reduce brightness/glare ("too white") */
+  --bg-overlay: linear-gradient(135deg, rgba(226, 232, 240, 0.92) 0%, rgba(203, 213, 225, 0.92) 100%);
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --border-color: #e2e8f0;
+  --primary: #2563eb;
+}
+
+.dark {
+  /* Dark Theme */
+  --bg-image: url('/bg-dark.png');
+  /* Dark blue/slate overlay, allowing the glowing lines to shine through subtly */
+  --bg-overlay: linear-gradient(135deg, rgba(2, 6, 23, 0.85) 0%, rgba(15, 23, 42, 0.85) 40%, rgba(30, 27, 75, 0.85) 100%);
+  --card-bg: rgba(15, 23, 42, 0.7);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --primary: #38bdf8;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  /* Stack the gradient overlay ON TOP of the theme-specific image */
+  background-image: var(--bg-overlay), var(--bg-image);
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+  color: var(--text-primary);
+  min-height: 100vh;
+  margin: 0;
+  transition: color 0.5s ease, background-image 0.5s ease-in-out;
+}
+
+/* Fix for native select options in dark mode */
+.dark select {
+  color-scheme: dark;
+}
+
+.dark option {
+  background-color: #0f172a;
+  /* matches slate-900 */
+  color: #f8fafc;
+}
+
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.dark .glass-card {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom scrollbar for dark theme */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 5px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Custom scrollbar for light theme */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: tbody;
+  /* fallback */
+  background: rgba(241, 245, 249, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
