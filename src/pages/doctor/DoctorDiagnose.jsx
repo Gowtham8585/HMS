@@ -41,27 +41,28 @@ export default function DoctorDiagnose() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (!SpeechRecognition) {
-            alert("Voice Input Not Supported.\n\nThis feature typically works best in Google Chrome or Microsoft Edge.\n\nIf you are using Brave, please enable 'Google Services' in settings, or switch to Chrome.");
+            alert("Voice Input Not Supported.\n\nThis feature typically works best in Google Chrome or Microsoft Edge.");
             return;
         }
 
-        if (!navigator.onLine) {
-            alert("Offline: Voice typing usually requires an internet connection.");
-            // We don't return here, we let it try, just in case offline models are available
+        // Toggle: If already listening to THIS field, stop it.
+        if (listeningField === field && recognitionRef.current) {
+            recognitionRef.current.stop();
+            return; // onend will handle cleanup
+        }
+
+        // If listening to ANOTHER field, stop that first
+        if (listeningField && recognitionRef.current) {
+            recognitionRef.current.stop();
         }
 
         try {
-            // Stop any previous active instance/listeners
-            if (recognitionRef.current) {
-                try { recognitionRef.current.stop(); } catch (e) { /* ignore */ }
-            }
-
             const recognition = new SpeechRecognition();
             recognitionRef.current = recognition;
 
             recognition.lang = 'en-US';
-            recognition.continuous = false;
-            recognition.interimResults = false;
+            recognition.continuous = true; // Keep listening until stopped
+            recognition.interimResults = true; // Show results as they speak
 
             setListeningField(field);
 
@@ -74,30 +75,52 @@ export default function DoctorDiagnose() {
                 setListeningField(null);
             };
 
+            let finalTranscriptHeader = ""; // To store what was already there before this session? 
+            // Actually, simplest is to append to existing text via state updater, but reacting to every interim result is tricky.
+            // Better: 
+            // 1. Capture the initial value of the field.
+            // 2. On result, NewValue = InitialValue + " " + CurrentTranscript.
+            // But we can't easily access InitialValue inside the callback without refs.
+
+            // ALTERNATIVE: Just handle `isFinal` results and append them?
+            // If `interimResults` is true, we get a stream.
+            // Let's stick to `continuous = false` but restart it? No, that cuts off words.
+            // Let's stick to `continuous = true`.
+
+            // To make it simple and robust:
+            // We will NOT use interimResults for now to avoid text flickering issues in the textarea, 
+            // UNLESS we are fancy. Let's just use continuous=true, interim=false.
+            // This way, every time they pause, we get a 'final' chunk, and we append it.
+
+            recognition.continuous = true;
+            recognition.interimResults = false;
+
             recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                setField(prev => (prev ? prev + " " + transcript : transcript));
+                let newContent = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        newContent += event.results[i][0].transcript + " ";
+                    }
+                }
+
+                if (newContent) {
+                    setField(prev => (prev ? prev + " " + newContent : newContent).trim());
+                }
             };
 
             recognition.onerror = (event) => {
                 console.error("Speech Recognition Error:", event.error);
-                setListeningField(null);
-
-                switch (event.error) {
-                    case 'not-allowed':
-                        alert("Microphone Blocked. Please allow microphone access in your browser settings (look for the icon in the URL bar).");
-                        break;
-                    case 'no-speech':
-                        // alert("No speech detected. Please try again."); // Often too noisy to alert on this
-                        break;
-                    case 'network':
-                        alert("Voice Input Failed: Network error. Please check your internet connection.");
-                        break;
-                    case 'service-not-allowed':
-                        alert("Voice Service Blocked. If using Brave/Firefox, this feature may be disabled by the browser. Please try Chrome or Edge.");
-                        break;
-                    default:
-                        alert(`Voice Input Failed (${event.error}). Please type manually.`);
+                if (event.error === 'not-allowed') {
+                    setListeningField(null);
+                    alert("Microphone Access Denied.");
+                } else if (event.error === 'network') {
+                    setListeningField(null);
+                    alert("Network Error during voice input.");
+                } else if (event.error === 'no-speech') {
+                    // Ignore, just keep listening or let it stop
+                } else {
+                    // Other errors
+                    setListeningField(null);
                 }
             };
 
@@ -106,7 +129,7 @@ export default function DoctorDiagnose() {
         } catch (e) {
             console.error("Speech setup error:", e);
             setListeningField(null);
-            alert("Could not start voice input. Please try Chrome or Edge.");
+            alert("Could not start voice input.");
         }
     };
 
@@ -205,7 +228,7 @@ ${medList || "None"}
     );
 
     const inputClasses = "w-full p-4 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-lg focus:border-blue-500 outline-none transition-all resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/20";
-    const labelClasses = "flex justify-between items-center text-xl font-bold text-gray-800 dark:text-white mb-3";
+    const labelClasses = "flex flex-wrap justify-between items-center gap-2 text-xl font-bold text-gray-800 dark:text-white mb-3";
 
     return (
         <Layout title="Patient Consultation">
