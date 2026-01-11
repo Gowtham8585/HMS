@@ -149,7 +149,7 @@ export default function WorkersList() {
                 </div>
 
 
-                <div className="glass-card rounded-3xl overflow-hidden shadow-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5">
+                <div className="glass-card rounded-3xl overflow-x-auto shadow-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5">
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10">
                             <tr>
