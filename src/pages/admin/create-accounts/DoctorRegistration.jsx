@@ -37,7 +37,13 @@ export default function DoctorRegistration() {
         e.preventDefault();
         setLoading(true);
         setError("");
-        const tempClient = getClient();
+
+        // Use direct client with env vars, ignoring localStorage
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
+        const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: { persistSession: false }
+        });
 
         try {
             const { data, error: signUpError } = await tempClient.auth.signUp({
@@ -52,52 +58,39 @@ export default function DoctorRegistration() {
                 }
             });
 
-            if (signUpError) throw signUpError;
+            if (signUpError) {
+                if (signUpError.message.includes("already registered")) {
+                    setError("User already exists.");
+                } else {
+                    throw signUpError;
+                }
+                return;
+            }
 
             if (data.user) {
-                // Create Profile using Admin Client (supabase)
-                // This prevents RLS issues if the new user doesn't have permissions yet
-                const { error: profileError } = await supabase.from('profiles').insert([{
+                const { error: docError } = await supabase.from('doctors').upsert({
                     id: data.user.id,
                     name: formData.name,
                     email: formData.email,
-                    role: 'doctor',
                     specialization: formData.specialization,
-                    address: formData.address
-                }]);
-
-                if (profileError) {
-                    console.error("Profile creation error:", profileError);
-                    alert("Error creating profile: " + profileError.message);
-                    return; // Stop if profile fails
-                }
-
-                // Create Doctor Record using Admin Client (supabase)
-                const { error: doctorError } = await supabase.from('doctors').insert([{
-                    id: data.user.id,
-                    name: formData.name,
-                    specialization: formData.specialization,
-                    consultation_fee: formData.fees,
-                    experience_years: formData.experience,
                     qualification: formData.qualification,
-                    availability: formData.availability,
-                    profile_id: data.user.id
-                }]);
+                    experience_years: formData.experience,
+                    consultation_fee: formData.consultationFee,
+                    phone: formData.phone,
+                    address: formData.address,
+                    availability: formData.availability
+                });
 
-                if (doctorError) {
-                    console.error("Doctor creation error:", doctorError);
-                    alert("Error creating doctor details: " + doctorError.message);
-                    return;
-                }
+                if (docError) throw docError;
 
-                alert(`✔ Doctor Created Successfully!\nLogin: ${formData.email}\nPassword: ${formData.password}`);
+                alert(`✔ Doctor Created Successfully!\nLogin: ${formData.email}`);
                 navigate('/admin/accounts');
             }
         } catch (err) {
+            console.error(err);
             setError(err.message);
         } finally {
             setLoading(false);
-            await tempClient.auth.signOut();
         }
     };
 

@@ -15,20 +15,20 @@ export default function StaffList() {
 
     async function loadStaff() {
         setLoading(true);
+        // Query the dedicated staff table
         const { data, error } = await supabase
-            .from('profiles')
+            .from('staff')
             .select('*')
-            .in('role', ['receptionist', 'coworker'])
-            .order('name');
+            .order('name'); // Role filter is not needed if staff table only has staff, or we filter by column
 
-        if (!error) setStaff(data);
+        if (!error) setStaff(data || []);
         setLoading(false);
     }
 
     const deleteStaff = async (id) => {
-        if (!confirm("Are you sure you want to remove this staff member? This will remove their profile access.")) return;
+        if (!confirm("Are you sure you want to remove this staff member?")) return;
 
-        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        const { error } = await supabase.from('staff').delete().eq('id', id);
         if (error) {
             alert("Error deleting staff: " + error.message);
         } else {
@@ -39,7 +39,7 @@ export default function StaffList() {
     const handleUpdate = async (e) => {
         e.preventDefault();
         setLoading(true);
-        const { error } = await supabase.from('profiles').update({
+        const { error } = await supabase.from('staff').update({
             name: editingStaff.name,
             role: editingStaff.role,
         }).eq('id', editingStaff.id);

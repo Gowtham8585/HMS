@@ -35,47 +35,69 @@ export default function WorkerRegistration() {
         e.preventDefault();
         setLoading(true);
         setError("");
-        const tempClient = getClient();
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
+        const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: { persistSession: false }
+        });
 
         try {
-            const emailPlaceholder = `${formData.name.replace(/\s/g, '').toLowerCase()}.${Date.now()}@worker.local`;
-            const passwordPlaceholder = "worker123";
+            // Ensure data is valid
+            if (!formData.name) {
+                setError("Please fill in all required fields.");
+                setLoading(false);
+                return;
+            }
+
+            // Generate a default password if not provided 
+            const passwordToUse = "worker123";
+
+            // AUTO-GENERATE EMAIL
+            const timestamp = Date.now().toString().slice(-4);
+            const cleanName = (formData.name || 'worker').replace(/\s+/g, '').toLowerCase();
+            const generatedEmail = `${cleanName}.${timestamp}@worker.local`;
 
             const { data, error: signUpError } = await tempClient.auth.signUp({
-                email: emailPlaceholder,
-                password: passwordPlaceholder,
+                email: generatedEmail,
+                password: passwordToUse,
                 options: {
                     data: {
                         displayName: formData.name,
-                        role: 'worker'
+                        role: 'worker',
+                        phone: formData.phone
                     }
                 }
             });
-
-            if (signUpError) throw signUpError;
+            if (signUpError) {
+                if (signUpError.message.includes("already registered")) {
+                    setError("User already exists.");
+                } else {
+                    throw signUpError;
+                }
+                return;
+            }
 
             if (data.user) {
-                // Use global admin client for DB inserts
-                const { error: workerError } = await supabase.from('workers').insert([{
+                const { error: workerError } = await supabase.from('workers').upsert({
                     id: data.user.id,
                     name: formData.name,
                     role: formData.role,
-                    per_day_salary: parseFloat(formData.salary),
+                    email: generatedEmail,
                     phone: formData.phone,
                     address: formData.address,
-                    join_date: new Date().toISOString().split('T')[0]
-                }]);
+                    per_day_salary: formData.salary
+                });
 
                 if (workerError) throw workerError;
 
-                // Instead of navigating, set created worker to show next step
-                setCreatedWorker({ id: data.user.id, name: formData.name });
+                alert(`✔ Worker Created Successfully!\nID: ${generatedEmail}\n(Auto-generated for internal use)`);
+                // navigate('/admin/accounts');
             }
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
-            await tempClient.auth.signOut();
         }
     };
 

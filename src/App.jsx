@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
+import AdminSignup from "./pages/AdminSignup";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import DoctorDiagnose from "./pages/doctor/DoctorDiagnose";
@@ -11,6 +12,7 @@ import RegisterPatient from "./pages/receptionist/RegisterPatient";
 import BookAppointment from "./pages/receptionist/BookAppointment";
 import Inventory from "./pages/shared/Inventory";
 import PatientDashboard from "./pages/patient/PatientDashboard";
+import WorkerDashboard from "./pages/worker/WorkerDashboard"; // Added
 import SetupScreen from "./components/SetupScreen";
 import { isKeyValid } from "./lib/supabase";
 import Attendance from "./pages/shared/Attendance";
@@ -40,11 +42,14 @@ function HomeRedirect() {
   if (role === 'doctor') return <Navigate to="/doctor" replace />;
   if (role === 'receptionist') return <Navigate to="/receptionist" replace />;
   if (role === 'patient') return <Navigate to="/patient" replace />;
+  if (role === 'worker') return <Navigate to="/worker" replace />;
+
+  console.warn("Unknown Role:", role);
 
   return (
     <div className="h-screen flex flex-col items-center justify-center gap-4 bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-white">
       <h2 className="text-2xl font-bold">Access Issue</h2>
-      <p>User Role Not Found: <span className="font-mono bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded">{role || 'null'}</span></p>
+      <p>User Role Not Found or Invalid: <span className="font-mono bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded">{role || 'null'}</span></p>
       <p className="text-sm opacity-70">Your account might be missing a role. Please contact support.</p>
       <button
         onClick={() => logout()}
@@ -69,6 +74,8 @@ export default function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin/signup" element={<AdminSignup />} />
 
             {/* ADMIN */}
             <Route path="/admin" element={
@@ -201,8 +208,15 @@ export default function App() {
               </ProtectedRoute>
             } />
 
+            {/* WORKER */}
+            <Route path="/worker" element={
+              <ProtectedRoute allowedRoles={['worker']}>
+                <WorkerDashboard />
+              </ProtectedRoute>
+            } />
+
             <Route path="/attendance" element={
-              <ProtectedRoute allowedRoles={['admin', 'doctor', 'receptionist', 'patient']}>
+              <ProtectedRoute allowedRoles={['admin', 'doctor', 'receptionist', 'patient', 'worker']}>
                 <Attendance />
               </ProtectedRoute>
             } />

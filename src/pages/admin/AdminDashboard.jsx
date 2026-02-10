@@ -9,31 +9,44 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         async function getStats() {
-            const { count: docCount } = await supabase.from('doctors').select('*', { count: 'exact', head: true });
-            const { count: staffCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).in('role', ['receptionist', 'coworker']);
-            const { count: patientCount } = await supabase.from('patients').select('*', { count: 'exact', head: true });
-            const { count: workerCount } = await supabase.from('workers').select('*', { count: 'exact', head: true });
-            const { data: medData } = await supabase.from('medicines').select('medicine_name, medicine_type, stock_quantity, expiry_date');
+            try {
+                // Count Doctors
+                const { count: docCount } = await supabase.from('doctors').select('*', { count: 'exact', head: true });
 
-            // Count unique medicine categories/types, excluding "General Medicine"
-            const medicineCategories = [...new Set(medData
-                ?.filter(m => m.medicine_type?.toLowerCase() !== 'general medicine')
-                .map(m => m.medicine_type)
-                .filter(Boolean)
-            )];
+                // Count Staff (Receptionists, etc.) - Corrected from 'profiles'
+                const { count: staffCount } = await supabase.from('staff').select('*', { count: 'exact', head: true });
 
-            const lowStockCount = medData?.filter(m => m.stock_quantity < 10).length || 0;
-            const expiredCount = medData?.filter(m => m.expiry_date && new Date(m.expiry_date) < new Date()).length || 0;
+                // Count Patients
+                const { count: patientCount } = await supabase.from('patients').select('*', { count: 'exact', head: true });
 
-            setStats({
-                doctors: docCount || 0,
-                staff: staffCount || 0,
-                patients: patientCount || 0,
-                medicines: medicineCategories.length || 0,
-                workers: workerCount || 0,
-                lowStock: lowStockCount,
-                expiredCount: expiredCount
-            });
+                // Count Workers
+                const { count: workerCount } = await supabase.from('workers').select('*', { count: 'exact', head: true });
+
+                // Medicines
+                const { data: medData } = await supabase.from('medicines').select('medicine_name, medicine_type, stock_quantity, expiry_date');
+
+                // Count unique medicine categories/types, excluding "General Medicine"
+                const medicineCategories = [...new Set(medData
+                    ?.filter(m => m.medicine_type?.toLowerCase() !== 'general medicine')
+                    .map(m => m.medicine_type)
+                    .filter(Boolean)
+                )];
+
+                const lowStockCount = medData?.filter(m => m.stock_quantity < 10).length || 0;
+                const expiredCount = medData?.filter(m => m.expiry_date && new Date(m.expiry_date) < new Date()).length || 0;
+
+                setStats({
+                    doctors: docCount || 0,
+                    staff: staffCount || 0,
+                    patients: patientCount || 0,
+                    medicines: medicineCategories.length || 0,
+                    workers: workerCount || 0,
+                    lowStock: lowStockCount,
+                    expiredCount: expiredCount
+                });
+            } catch (error) {
+                console.error("Error fetching admin stats:", error);
+            }
         }
         getStats();
     }, []);

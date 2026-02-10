@@ -1,20 +1,10 @@
+
 import { useState } from "react";
 import Layout from "../../../components/Layout";
 import { createClient } from "@supabase/supabase-js";
 import { Shield, AlertCircle, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-const getClient = () => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = localStorage.getItem('supabase_key') || import.meta.env.VITE_SUPABASE_KEY;
-    return createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false
-        }
-    });
-};
+import { supabase } from "../../../lib/supabase"; // Use the global client for profile creation
 
 export default function AdminRegistration() {
     const navigate = useNavigate();
@@ -31,9 +21,16 @@ export default function AdminRegistration() {
         e.preventDefault();
         setLoading(true);
         setError("");
-        const tempClient = getClient();
+
+        // Create a temporary client for signup (to avoid logging out current admin)
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
+        const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: { persistSession: false }
+        });
 
         try {
+            // 1. Sign Up the User
             const { data, error: signUpError } = await tempClient.auth.signUp({
                 email: formData.email,
                 password: formData.password,
@@ -45,25 +42,43 @@ export default function AdminRegistration() {
                 }
             });
 
-            if (signUpError) throw signUpError;
+            // Handle "User already exists" gracefully
+            if (signUpError) {
+                if (signUpError.message.toLowerCase().includes("already registered")) {
+                    alert("User already exists! We will update their role to Admin.");
+                    // Proceed to update profile anyway (assuming we want to promote them)
+                    // But we don't have the User ID if signup failed. 
+                    // So we must stop here or ask manual intervention.
+                    setError("User already exists. Please use 'Account Manager' to edit existing users.");
+                    setLoading(false);
+                    return;
+                }
+                throw signUpError;
+            }
 
             if (data.user) {
-                await tempClient.from('profiles').insert([{
+                // 2. Create Admin Record (Skip Profile)
+                const { error: adminError } = await supabase.from('admins').upsert({
                     id: data.user.id,
                     name: formData.name,
                     email: formData.email,
-                    role: 'admin',
                     address: formData.address
-                }]);
+                    // role is implied by being in this table
+                });
+
+                if (adminError) {
+                    console.error("Admin Record Error:", adminError);
+                    throw new Error("Failed to create admin record: " + adminError.message);
+                }
 
                 alert(`✔ New Admin Created!\nLogin: ${formData.email}\nPassword: ${formData.password}`);
                 navigate('/admin/accounts');
             }
         } catch (err) {
-            setError(err.message);
+            console.error("Signup Error:", err);
+            setError(err.message || "An unexpected error occurred");
         } finally {
             setLoading(false);
-            await tempClient.auth.signOut();
         }
     };
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../../components/Layout";
+import Chatbot from "../../components/Chatbot";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Calendar, Pill, FileText } from "lucide-react";
@@ -380,6 +381,7 @@ export default function PatientDashboard() {
                     </div>
                 )}
             </div>
+            <Chatbot />
         </Layout>
     );
 }

@@ -37,43 +37,78 @@ export const AuthProvider = ({ children }) => {
 
     const fetchUserProfile = async (userId) => {
         try {
-            // Try fetching both role and name
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('role, name')
-                .eq('id', userId)
-                .single();
-
-            if (error) {
-                console.warn("Error fetching profile, retrying with role only:", error.message);
-                // Fallback: Try fetching just role if 'name' caused the issue
-                const { data: roleData, error: roleError } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('id', userId)
-                    .single();
-
-                if (roleError) throw roleError;
-                setRole(roleData?.role);
-                // Name remains null
-            } else {
-                setRole(data?.role);
-                setUserName(data?.name);
+            // Check ADMINS table
+            let { data: admin } = await supabase.from('admins').select('id, name').eq('id', userId).maybeSingle();
+            if (admin) {
+                setRole('admin');
+                setUserName(admin.name);
+                return;
             }
+
+            // Check DOCTORS table
+            let { data: doctor } = await supabase.from('doctors').select('id, name').eq('id', userId).maybeSingle();
+            if (doctor) {
+                setRole('doctor');
+                setUserName(doctor.name);
+                return;
+            }
+
+            // Check STAFF table (Receptionists)
+            let { data: staff } = await supabase.from('staff').select('id, name, role').eq('id', userId).maybeSingle();
+            if (staff && staff.role?.toLowerCase() === 'receptionist') {
+                setRole('receptionist');
+                setUserName(staff.name);
+                return;
+            }
+
+            // Check PATIENTS table
+            let { data: patient } = await supabase.from('patients').select('id, name').eq('id', userId).maybeSingle();
+            if (patient) {
+                setRole('patient');
+                setUserName(patient.name);
+                return;
+            }
+
+            // Check WORKERS table
+            let { data: worker } = await supabase.from('workers').select('id, name').eq('id', userId).maybeSingle();
+            if (worker) {
+                setRole('worker');
+                setUserName(worker.name);
+                return;
+            }
+
+            // FALLBACK TO AUTH META (Last Resort)
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user && user.user_metadata?.role) {
+                console.log("Role found in metadata:", user.user_metadata.role);
+                setRole(user.user_metadata.role);
+                setUserName(user.user_metadata.displayName || user.email.split('@')[0]);
+
+                // OPTIONAL: Auto-create record in specific table if missing? 
+                // For now, let's just allow access based on metadata to unblock login.
+            } else {
+                console.error("Role not found in any table or metadata");
+                setRole(null);
+            }
+
         } catch (error) {
             console.error("Critical Profile Fetch Error:", error);
-            // Don't set loading false here, let finally handle it
+            setRole(null);
         } finally {
             setLoading(false);
         }
     };
 
     const login = async (email, password) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (data.user) {
+            setUser(data.user);
+            await fetchUserProfile(data.user.id);
+        }
     };
 
-    const signUp = async (email, password, name, role, specialization = null) => {
+    const signUp = async (email, password, name, role, specialization = null, phone = null, address = null) => {
         // 1. Sign up auth user
         const { data, error } = await supabase.auth.signUp({
             email,
@@ -81,39 +116,27 @@ export const AuthProvider = ({ children }) => {
             options: {
                 data: {
                     displayName: name,
-                    role: role,
+                    role: role, // Still store in metadata as backup
                     specialization: specialization
                 }
             }
         });
         if (error) throw error;
 
-        // 2. Create profile & patient record if applicable
+        // 2. Insert into Specific Table based on Role
         if (data.user) {
-            // Check if profile already exists
-            const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', data.user.id).single();
+            const userId = data.user.id;
 
-            if (!existingProfile) {
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .insert([{
-                        id: data.user.id,
-                        name,
-                        email,
-                        role,
-                        specialization: specialization
-                    }]);
-
-                if (profileError) throw profileError;
-
-                // 3. If role is patient, also create entry in 'patients' table
-                if (role === 'patient') {
-                    await supabase.from('patients').insert([{
-                        id: data.user.id, // Use same UUID
-                        name: name,
-                        medical_history: 'New Patient Registration'
-                    }]);
-                }
+            if (role === 'admin') {
+                await supabase.from('admins').insert([{ id: userId, name, email }]);
+            } else if (role === 'doctor') {
+                await supabase.from('doctors').insert([{ id: userId, name, email, specialization, address }]);
+            } else if (role === 'receptionist') {
+                await supabase.from('staff').insert([{ id: userId, name, email, role: 'Receptionist', phone, address, salary: 0 }]);
+            } else if (role === 'patient') {
+                await supabase.from('patients').insert([{ id: userId, name, phone, address, medical_history: 'New Patient' }]);
+            } else if (role === 'worker') {
+                await supabase.from('workers').insert([{ id: userId, name, role: 'General', email, phone, address }]);
             }
         }
     };

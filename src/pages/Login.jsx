@@ -4,11 +4,12 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import hmsLogo from "../assets/hms_logo.png";
 import { useTheme } from "../contexts/ThemeContext";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const { login } = useAuth();
     const { theme, toggleTheme } = useTheme();
@@ -24,7 +25,7 @@ export default function Login() {
             // Auth wrapper handles redirect based on role
             navigate("/");
         } catch (err) {
-            setError("Failed to log in. Check email/password.");
+            setError(err.message || "Failed to log in. Check email/password.");
             console.error(err);
         } finally {
             setLoading(false);
@@ -78,14 +79,23 @@ export default function Login() {
                     </div>
                     <div>
                         <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2 text-lg">Password</label>
-                        <input
-                            type="password"
-                            required
-                            className="w-full p-4 bg-gray-50 dark:bg-white/5 border-2 border-gray-200 dark:border-white/10 rounded-lg text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                            placeholder="Enter password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                required
+                                className="w-full p-4 pr-12 bg-gray-50 dark:bg-white/5 border-2 border-gray-200 dark:border-white/10 rounded-lg text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                placeholder="Enter password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 focus:outline-none"
+                            >
+                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </button>
+                        </div>
                     </div>
                     <button
                         disabled={loading}
@@ -95,8 +105,8 @@ export default function Login() {
                     </button>
                 </form>
 
-                <div className="mt-8 text-center text-sm opacity-50 text-gray-600 dark:text-gray-400">
-                    <p>Protected System. Access restricted to authorized personnel.</p>
+                <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+                    <p className="opacity-50 mb-2">Protected System. Access restricted to authorized personnel.</p>
                 </div>
             </div>
         </div>

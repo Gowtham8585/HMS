@@ -33,7 +33,12 @@ export default function ReceptionistRegistration() {
         e.preventDefault();
         setLoading(true);
         setError("");
-        const tempClient = getClient();
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
+        const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: { persistSession: false }
+        });
 
         try {
             const { data, error: signUpError } = await tempClient.auth.signUp({
@@ -48,31 +53,35 @@ export default function ReceptionistRegistration() {
                 }
             });
 
-            if (signUpError) throw signUpError;
+            if (signUpError) {
+                if (signUpError.message.includes("already registered")) {
+                    setError("User already exists.");
+                } else {
+                    throw signUpError;
+                }
+                return;
+            }
 
             if (data.user) {
-                // Use global supabase (Admin) client for insert to bypass RLS issues for new user
-                const { error: profileError } = await supabase.from('profiles').insert([{
+                const { error: staffError } = await supabase.from('staff').upsert({
                     id: data.user.id,
                     name: formData.name,
                     email: formData.email,
-                    role: 'receptionist',
-                    address: formData.address
-                }]);
+                    role: 'Receptionist',
+                    phone: formData.phone,
+                    address: formData.address,
+                    salary: 0
+                });
 
-                if (profileError) {
-                    alert("Error creating profile: " + profileError.message);
-                    return;
-                }
+                if (staffError) throw staffError;
 
-                alert(`✔ Receptionist Created Successfully!\nLogin: ${formData.email}\nPassword: ${formData.password}`);
+                alert(`✔ Receptionist Created Successfully!\nLogin: ${formData.email}`);
                 navigate('/admin/accounts');
             }
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
-            await tempClient.auth.signOut();
         }
     };
 
