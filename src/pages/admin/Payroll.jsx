@@ -47,12 +47,16 @@ export default function Payroll() {
         let halfDays = 0;
 
         userAtt.forEach(record => {
-            if (record.in_time && record.out_time) {
-                const duration = (new Date(record.out_time) - new Date(record.in_time)) / (1000 * 60 * 60);
+            // Support both old (in_time) and new (check_in) columns for transition if needed, but per schema we use check_in
+            const inTime = record.check_in || record.in_time;
+            const outTime = record.check_out || record.out_time;
+
+            if (inTime && outTime) {
+                const duration = (new Date(outTime) - new Date(inTime)) / (1000 * 60 * 60);
                 if (duration >= 8) fullDays++;
                 else if (duration >= 4) halfDays++;
                 else halfDays++; // Any check-in counts as half
-            } else if (record.in_time) {
+            } else if (inTime) {
                 halfDays++; // Checked in but not out yet or missing data
             } else if (record.status === 'present') {
                 fullDays++; // Manual entries
@@ -90,7 +94,7 @@ export default function Payroll() {
 
     const calculateTotal = () => {
         return [...doctors, ...staff].reduce((acc, curr) => {
-            const userId = curr.profile_id || curr.id;
+            const userId = curr.user_id || curr.id;
             const stats = getAttendanceStats(userId);
             const autoSalary = (curr.per_day_salary || 0) * stats.effectiveDays;
             return acc + (autoSalary || parseFloat(curr.salary) || 0);
@@ -193,7 +197,7 @@ export default function Payroll() {
                                 {loading ? (
                                     <tr><td colSpan="6" className="p-20 text-center text-gray-500 dark:text-gray-400 italic font-medium tracking-wide">Calculating present days...</td></tr>
                                 ) : filteredEmployees.length > 0 ? filteredEmployees.map((emp) => {
-                                    const stats = getAttendanceStats(emp.profile_id || emp.id);
+                                    const stats = getAttendanceStats(emp.user_id || emp.id);
                                     const autoSalary = (emp.per_day_salary || 0) * stats.effectiveDays;
                                     const displayName = emp.name?.startsWith('Dr.') ? emp.name : (activeTab === 'doctor' ? `Dr. ${emp.name}` : emp.name);
 
@@ -279,8 +283,8 @@ export default function Payroll() {
                                     <div className="p-4 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-2xl">
                                         <p className="text-[10px] font-bold opacity-50 uppercase tracking-widest mb-1 text-indigo-500 dark:text-indigo-300">Monthly Yield (Auto)</p>
                                         <div className="flex items-end gap-2">
-                                            <span className="text-3xl font-black text-indigo-600 dark:text-indigo-400">₹{((editingEmployee.per_day_salary || 0) * getAttendanceStats(editingEmployee.profile_id || editingEmployee.id).effectiveDays).toLocaleString()}</span>
-                                            <span className="text-[10px] font-bold opacity-40 mb-1 text-gray-500 dark:text-white">/ {getAttendanceStats(editingEmployee.profile_id || editingEmployee.id).effectiveDays} days</span>
+                                            <span className="text-3xl font-black text-indigo-600 dark:text-indigo-400">₹{((editingEmployee.per_day_salary || 0) * getAttendanceStats(editingEmployee.user_id || editingEmployee.id).effectiveDays).toLocaleString()}</span>
+                                            <span className="text-[10px] font-bold opacity-40 mb-1 text-gray-500 dark:text-white">/ {getAttendanceStats(editingEmployee.user_id || editingEmployee.id).effectiveDays} days</span>
                                         </div>
                                     </div>
                                 </div>

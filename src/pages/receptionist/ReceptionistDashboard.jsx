@@ -41,12 +41,6 @@ export default function ReceptionistDashboard() {
                     alert={expiredCount > 0}
                 />
                 <DashboardButton
-                    title="Today's List"
-                    icon={ClipboardList}
-                    to="/receptionist/appointments"
-                    color="from-amber-500 to-orange-600"
-                />
-                <DashboardButton
                     title="Generate Bill"
                     icon={ClipboardList}
                     to="/receptionist/billing"

@@ -57,6 +57,7 @@ export default function AllAttendance() {
                 let role = "unknown";
 
                 // Strategy 1: Check Workers Table
+                // Workers table uses Auth ID as Primary Key
                 const worker = (workerList || []).find(w => w.id === record.user_id);
                 if (worker) {
                     name = worker.name;
@@ -64,16 +65,18 @@ export default function AllAttendance() {
                 }
                 // Strategy 2: Check Doctors Table
                 else {
-                    const doctor = (docList || []).find(d => d.id === record.user_id);
+                    // Doctors table uses user_id for Auth ID
+                    const doctor = (docList || []).find(d => d.user_id === record.user_id);
                     if (doctor) {
-                        name = doctor.name;
+                        name = doctor.full_name || doctor.name;
                         role = 'doctor';
                     }
                     // Strategy 3: Check Profiles (Staff)
                     else {
-                        const staff = (staffList || []).find(s => s.id === record.user_id);
+                        // Profiles table uses user_id for Auth ID
+                        const staff = (staffList || []).find(s => s.user_id === record.user_id);
                         if (staff) {
-                            name = staff.name;
+                            name = staff.full_name || staff.name;
                             role = staff.role || 'receptionist';
                             if (role === 'coworker') role = 'receptionist'; // Normalize
                         }
@@ -97,21 +100,19 @@ export default function AllAttendance() {
     }
 
     const calculateStats = (userId) => {
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
         const userMonthAtt = attendance.filter(a =>
             a.user_id === userId &&
-            new Date(a.date) >= startOfMonth
+            (a.date && a.date.startsWith(monthPrefix))
         );
 
         let full = 0;
         let half = 0;
         userMonthAtt.forEach(record => {
-            // Prefer check_in/check_out, fallback to in_time/out_time
-            const inTime = record.check_in || record.in_time || record.check_in_time;
-            const outTime = record.check_out || record.out_time;
+            const inTime = record.check_in;
+            const outTime = record.check_out;
 
             if (inTime && outTime) {
                 const hrs = (new Date(outTime) - new Date(inTime)) / (1000 * 3600);
@@ -131,7 +132,7 @@ export default function AllAttendance() {
 
     const getSummary = () => {
         let type = 'staff';
-        let sourceData = users.staff;
+        let sourceData = users.staff.filter(u => ['receptionist', 'coworker', 'staff', 'nurse'].includes(u.role));
 
         if (activeTab === 'summary_doctor') {
             type = 'doctor';
@@ -142,7 +143,10 @@ export default function AllAttendance() {
         }
 
         return sourceData.map(emp => {
-            const userIdForAttendance = emp.profile_id || emp.id;
+            // Correctly identify the Auth ID for the user
+            // Doctors & Profile/Staff tables use 'user_id' to link to auth.users
+            // Workers table uses 'id' (which is the auth.id)
+            const userIdForAttendance = emp.user_id || emp.id;
             const stats = calculateStats(userIdForAttendance);
             const salary = (emp.per_day_salary || 0) * stats.effective;
 
@@ -154,7 +158,7 @@ export default function AllAttendance() {
     };
 
     const filteredAttendance = attendance.filter(record => {
-        if (activeTab === 'receptionist') return record.profiles?.role === 'receptionist' || record.profiles?.role === 'coworker';
+        if (activeTab === 'receptionist') return record.profiles?.role === 'receptionist' || record.profiles?.role === 'coworker' || record.profiles?.role === 'staff';
         return record.profiles?.role === activeTab;
     });
 
@@ -213,8 +217,8 @@ export default function AllAttendance() {
                                     <tr>
                                         <th className="p-6">Date</th>
                                         <th className="p-6">Name</th>
-                                        <th className="p-6">In Time</th>
-                                        <th className="p-6">Out Time</th>
+                                        <th className="p-6">Check In</th>
+                                        <th className="p-6">Check Out</th>
                                         <th className="p-6 text-right">Status</th>
                                     </tr>
                                 )}
@@ -284,8 +288,8 @@ export default function AllAttendance() {
                                 ) : (
                                     filteredAttendance.length > 0 ? filteredAttendance.map((record) => {
                                         // Robust time checking
-                                        const checkInIndex = record.check_in || record.in_time || record.check_in_time;
-                                        const checkOutIndex = record.check_out || record.out_time;
+                                        const checkInIndex = record.check_in;
+                                        const checkOutIndex = record.check_out;
 
                                         return (
                                             <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">

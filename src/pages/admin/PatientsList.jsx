@@ -55,8 +55,8 @@ export default function PatientsList() {
         e.preventDefault();
         setLoading(true);
         const { error } = await supabase.from('patients').update({
-            name: editingPatient.name,
-            age: editingPatient.age,
+            full_name: editingPatient.full_name,
+            date_of_birth: editingPatient.date_of_birth,
             gender: editingPatient.gender,
             phone: editingPatient.phone,
             medical_history: editingPatient.medical_history
@@ -71,8 +71,20 @@ export default function PatientsList() {
         setLoading(false);
     };
 
+    function calculateAge(dob) {
+        if (!dob) return 'N/A';
+        const today = new Date();
+        const birthDate = new Date(dob);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age;
+    }
+
     const filteredPatients = patients.filter(p =>
-        p.name?.toLowerCase().includes(search.toLowerCase()) ||
+        p.full_name?.toLowerCase().includes(search.toLowerCase()) ||
         p.phone?.toLowerCase().includes(search.toLowerCase())
     );
 
@@ -116,14 +128,14 @@ export default function PatientsList() {
                                         <td className="p-6">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-500 font-bold border border-emerald-100 dark:border-emerald-500/30">
-                                                    {patient.name?.charAt(0)}
+                                                    {patient.full_name?.charAt(0)}
                                                 </div>
-                                                <span className="font-bold text-lg group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors text-gray-900 dark:text-white">{patient.name}</span>
+                                                <span className="font-bold text-lg group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors text-gray-900 dark:text-white">{patient.full_name}</span>
                                             </div>
                                         </td>
                                         <td className="p-6">
                                             <div className="flex flex-col">
-                                                <span className="text-gray-600 dark:text-gray-200">{patient.age} Years</span>
+                                                <span className="text-gray-600 dark:text-gray-200">{calculateAge(patient.date_of_birth)} Years</span>
                                                 <span className="text-xs text-gray-400 dark:text-gray-500 uppercase font-black">{patient.gender}</span>
                                             </div>
                                         </td>
@@ -182,19 +194,19 @@ export default function PatientsList() {
                                     <input
                                         required
                                         className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white transition-all"
-                                        value={editingPatient.name}
-                                        onChange={e => setEditingPatient({ ...editingPatient, name: e.target.value })}
+                                        value={editingPatient.full_name}
+                                        onChange={e => setEditingPatient({ ...editingPatient, full_name: e.target.value })}
                                     />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Age</label>
+                                        <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Date of Birth</label>
                                         <input
-                                            type="number"
+                                            type="date"
                                             required
                                             className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white transition-all"
-                                            value={editingPatient.age}
-                                            onChange={e => setEditingPatient({ ...editingPatient, age: e.target.value })}
+                                            value={editingPatient.date_of_birth || ''}
+                                            onChange={e => setEditingPatient({ ...editingPatient, date_of_birth: e.target.value })}
                                         />
                                     </div>
                                     <div>

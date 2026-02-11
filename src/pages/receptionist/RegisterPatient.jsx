@@ -61,8 +61,8 @@ export default function RegisterPatient() {
             if (authData.user) {
                 // 3. Create Profile (Public)
                 const { error: profileError } = await supabase.from('profiles').upsert({
-                    id: authData.user.id,
-                    name: formData.name,
+                    user_id: authData.user.id, // Auth ID goes here
+                    full_name: formData.name,
                     email: tempEmail,
                     role: 'patient'
                 });
@@ -71,10 +71,10 @@ export default function RegisterPatient() {
 
                 // 4. Create Patient Record (Private)
                 const { error: patientError } = await supabase.from('patients').upsert({
-                    id: authData.user.id,
-                    name: formData.name,
-                    age: parseInt(formData.age),
-                    gender: formData.gender,
+                    user_id: authData.user.id, // Auth ID goes here, let DB generate 'id'
+                    full_name: formData.name,
+                    date_of_birth: `${new Date().getFullYear() - parseInt(formData.age)}-01-01`, // Approx DOB from Age
+                    gender: formData.gender.toLowerCase(),
                     phone: formData.phone,
                     address: formData.address,
                     blood_group: formData.bloodGroup,

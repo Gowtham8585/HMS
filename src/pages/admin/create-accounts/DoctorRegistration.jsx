@@ -68,17 +68,34 @@ export default function DoctorRegistration() {
             }
 
             if (data.user) {
-                const { error: docError } = await supabase.from('doctors').upsert({
-                    id: data.user.id,
-                    name: formData.name,
+                // 1. Manually insert/ensure Profile entry first
+                // New Schema: id (auto), user_id (data.user.id), full_name, role, email
+                const { error: profileError } = await supabase.from('profiles').upsert({
+                    user_id: data.user.id,
+                    email: formData.email,
+                    full_name: formData.name,
+                    role: 'doctor'
+                }, { onConflict: 'user_id' }); // Conflict on user_id now
+
+                if (profileError) {
+                    console.error("Profile creation failed:", profileError);
+                }
+
+                // 2. Insert into Doctors table
+                // New Schema: id (auto), user_id, full_name, specialization, etc.
+                const { error: docError } = await supabase.from('doctors').insert({
+                    // id is auto-generated
+                    user_id: data.user.id,
+                    full_name: formData.name,
                     email: formData.email,
                     specialization: formData.specialization,
                     qualification: formData.qualification,
-                    experience_years: formData.experience,
-                    consultation_fee: formData.consultationFee,
-                    phone: formData.phone,
-                    address: formData.address,
-                    availability: formData.availability
+                    experience_years: textToNumber(formData.experience),
+                    consultation_fee: textToNumber(formData.fees),
+                    // phone: formData.phone, // Add if you have it
+                    // available_days: ... 
+                    // available_from: ...
+                    is_active: true
                 });
 
                 if (docError) throw docError;
@@ -92,6 +109,11 @@ export default function DoctorRegistration() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const textToNumber = (val) => {
+        const num = parseFloat(val);
+        return isNaN(num) ? 0 : num;
     };
 
     const inputClasses = "w-full p-4 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder-gray-400 dark:placeholder-white/20";

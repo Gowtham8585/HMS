@@ -182,10 +182,9 @@ export default function WorkerAttendance() {
 
             if (records && records.length > 0) {
                 const record = records[0];
-                if (!record.check_out && !record.out_time) {
+                if (!record.check_out) {
                     const { error: updateError } = await supabase.from('attendance').update({
                         check_out: nowISO,
-                        out_time: nowISO,
                         status: 'present'
                     }).eq('id', record.id);
 
@@ -198,11 +197,8 @@ export default function WorkerAttendance() {
             } else {
                 const { error: insertError } = await supabase.from('attendance').insert({
                     user_id: userData.id,
-                    user_type: 'worker',
                     date: today,
                     check_in: nowISO,
-                    in_time: nowISO,
-                    check_in_time: nowISO,
                     status: 'present'
                 });
 

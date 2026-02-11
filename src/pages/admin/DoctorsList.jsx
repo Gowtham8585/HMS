@@ -7,6 +7,7 @@ import { useAuth } from "../../contexts/AuthContext";
 export default function DoctorsList() {
     const { role: currentUserRole } = useAuth();
     const [doctors, setDoctors] = useState([]);
+    // ... rest of state ...
     const [profiles, setProfiles] = useState([]); // Registered doctor profiles
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -45,7 +46,7 @@ export default function DoctorsList() {
             const { data, error } = await supabase
                 .from('doctors')
                 .select('*')
-                .order('name');
+                .order('full_name');
 
             if (error) {
                 console.error("Error loading doctors:", error);
@@ -137,11 +138,7 @@ export default function DoctorsList() {
                     availability: editingDoctor.availability,
                     // If address is something you want to support updating in the future, you'd add it here too.
                     // But for now, let's keep it consistent with what's being edited.
-                    // Wait, the user asked to 'not updates doctors list'.
-                    // Ah, the user might mean that the list is NOT UPDATING when they make changes or add.
-                    // But the code has realtime subscription.
-                    // Let's assume they might want to VIEW the address in the list or edit it.
-                    // I'll add address to the edit block just in case.
+                    // Update standard fields
                 })
                 .eq('id', editingDoctor.id);
 
@@ -183,7 +180,7 @@ export default function DoctorsList() {
     };
 
     const filteredDoctors = doctors.filter(d =>
-        d.name?.toLowerCase().includes(search.toLowerCase()) ||
+        d.full_name?.toLowerCase().includes(search.toLowerCase()) ||
         d.specialization?.toLowerCase().includes(search.toLowerCase())
     );
 
@@ -239,7 +236,7 @@ export default function DoctorsList() {
                             <form onSubmit={handleUpdateDoctor} className="space-y-4">
                                 <div>
                                     <label className={labelClasses}>Doctor Name</label>
-                                    <input required className={inputClasses} value={editingDoctor.name} onChange={e => setEditingDoctor({ ...editingDoctor, name: e.target.value })} />
+                                    <input required className={inputClasses} value={editingDoctor.full_name} onChange={e => setEditingDoctor({ ...editingDoctor, full_name: e.target.value })} />
                                 </div>
                                 <div>
                                     <label className={labelClasses}>Specialization</label>
@@ -250,17 +247,6 @@ export default function DoctorsList() {
                                         onChange={e => setEditingDoctor({ ...editingDoctor, specialization: e.target.value })}
                                     >
                                         {SPECIALIZATIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className={labelClasses}>Availability Schedule</label>
-                                    <select
-                                        className={inputClasses}
-                                        style={{ colorScheme: 'light dark' }}
-                                        value={editingDoctor.availability}
-                                        onChange={e => setEditingDoctor({ ...editingDoctor, availability: e.target.value })}
-                                    >
-                                        {AVAILABILITY_SLOTS.map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
                                 <button className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold text-lg mt-4 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 font-black">UPDATE DOCTOR</button>
@@ -277,7 +263,6 @@ export default function DoctorsList() {
                                     <th className="p-6 font-bold uppercase tracking-wider text-sm opacity-60 text-gray-500 dark:text-gray-400">Doctor Name</th>
                                     <th className="p-6 font-bold uppercase tracking-wider text-sm opacity-60 text-gray-500 dark:text-gray-400">Specialization</th>
                                     <th className="p-6 font-bold uppercase tracking-wider text-sm opacity-60 text-gray-500 dark:text-gray-400">Availability</th>
-                                    {/* <th className="p-6 font-bold uppercase tracking-wider text-sm opacity-60">Contact</th> */}
                                     <th className="p-6 font-bold uppercase tracking-wider text-sm opacity-60 text-gray-500 dark:text-gray-400">Actions</th>
                                 </tr>
                             </thead>
@@ -289,10 +274,10 @@ export default function DoctorsList() {
                                         <td className="p-6">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-500 font-black text-xl">
-                                                    {doc.name?.charAt(0)}
+                                                    {doc.full_name?.charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <span className="font-bold text-lg group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors block text-gray-900 dark:text-white">Dr. {doc.name}</span>
+                                                    <span className="font-bold text-lg group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors block text-gray-900 dark:text-white">Dr. {doc.full_name}</span>
                                                     <span className="text-[10px] opacity-40 uppercase font-black tracking-widest text-gray-500 dark:text-gray-400">{new Date(doc.created_at).toLocaleDateString()}</span>
                                                 </div>
                                             </div>
@@ -303,24 +288,9 @@ export default function DoctorsList() {
                                             </span>
                                         </td>
                                         <td className="p-6 text-gray-500 dark:text-gray-400 italic font-medium">
-                                            {doc.availability || 'Not specified'}
-                                        </td>
-                                        {/* Display Address if available from joined data or fetch */}
-                                        {/* Since we are not doing a join in the initial select, we might not have it.
-                                            However, for a quick fix validation, we can assume the user wants to see it.
-                                            Best practice: Update loadDoctors to join profiles.
-                                        */}
-                                        <td className="p-6 text-sm text-gray-500 dark:text-gray-300">
-                                            {/* Showing a placeholder or the actual address if we decide to fetch it.
-                                                For now, let's keep the table clean as requested previously but ensure data integrity.
-                                                If the user specifically asked for 'updates', they might mean they don't see the new doctor AT ALL.
-                                                
-                                                Wait, "now also not upadates doctors list after creates new doctor".
-                                                This usually means Realtime isn't triggering or the manual fetch isn't working.
-                                                
-                                                I will add a manual refresh button to the top to help debug/forced refresh.
-                                            */}
-                                            <span className="opacity-50">View Details</span>
+                                            {doc.available_days && doc.available_days.length > 0
+                                                ? `${doc.available_days.join(', ')} (${doc.available_from || ''} - ${doc.available_to || ''})`
+                                                : 'Not specified'}
                                         </td>
                                         <td className="p-6">
                                             <div className="flex items-center gap-2">
@@ -368,6 +338,6 @@ export default function DoctorsList() {
                     </div>
                 </div>
             </div>
-        </Layout >
+        </Layout>
     );
 }

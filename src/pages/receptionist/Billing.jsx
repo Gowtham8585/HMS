@@ -26,7 +26,7 @@ export default function Billing() {
     }, [selectedPatient]);
 
     const fetchData = async () => {
-        const { data: pData } = await supabase.from('patients').select('*').order('name');
+        const { data: pData } = await supabase.from('patients').select('*').order('full_name');
         if (pData) setPatients(pData);
 
         const { data: mData } = await supabase.from('medicines').select('*').gt('stock_quantity', 0).order('medicine_name');
@@ -172,7 +172,7 @@ export default function Billing() {
     };
 
     const filteredPatients = patients.filter(p =>
-        p.name.toLowerCase().includes(searchPatient.toLowerCase()) ||
+        (p.full_name || p.name || "").toLowerCase().includes(searchPatient.toLowerCase()) ||
         p.phone?.includes(searchPatient)
     );
 
@@ -205,7 +205,7 @@ export default function Billing() {
                                         : 'hover:bg-gray-50 border-transparent'
                                         }`}
                                 >
-                                    <p className="font-bold text-gray-800">{p.name}</p>
+                                    <p className="font-bold text-gray-800">{p.full_name}</p>
                                     <p className="text-xs text-gray-500">{p.phone} • {p.age} yrs</p>
                                 </button>
                             ))}
@@ -216,7 +216,7 @@ export default function Billing() {
                         <>
                             <div className="bg-blue-600 p-6 rounded-3xl text-white shadow-lg shadow-blue-500/20">
                                 <p className="text-xs uppercase font-bold opacity-60 tracking-widest mb-1">Selected Patient</p>
-                                <h4 className="text-2xl font-black">{selectedPatient.name}</h4>
+                                <h4 className="text-2xl font-black">{selectedPatient.full_name}</h4>
                                 <p className="opacity-80">{selectedPatient.phone}</p>
                             </div>
 

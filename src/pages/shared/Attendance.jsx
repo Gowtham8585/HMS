@@ -33,8 +33,8 @@ export default function Attendance() {
         const todayRecord = data?.find(r => r.date === today);
         if (todayRecord) {
             setTodayRecordId(todayRecord.id);
-            if (todayRecord.in_time) setCheckedInToday(true);
-            if (todayRecord.out_time) setCheckedOutToday(true);
+            if (todayRecord.check_in) setCheckedInToday(true);
+            if (todayRecord.check_out) setCheckedOutToday(true);
         }
     };
 
@@ -44,9 +44,9 @@ export default function Attendance() {
             .from('attendance')
             .insert([{
                 user_id: user.id,
-                user_type: role === 'coworker' ? 'receptionist' : role,
+                // user_type removed as it's not in schema
                 status: 'present',
-                in_time: new Date().toISOString()
+                check_in: new Date().toISOString()
             }]);
 
         if (!error) {
@@ -66,7 +66,7 @@ export default function Attendance() {
         const { error } = await supabase
             .from('attendance')
             .update({
-                out_time: new Date().toISOString()
+                check_out: new Date().toISOString()
             })
             .eq('id', todayRecordId);
 
@@ -130,17 +130,17 @@ export default function Attendance() {
                     </h3>
                     <div className="space-y-4">
                         {history.length > 0 ? history.map((record) => (
-                            <div key={record.id} className={`flex items-center justify-between p-5 rounded-2xl border ${record.in_time && !record.out_time ? 'bg-indigo-50 dark:bg-indigo-500/5 border-indigo-200 dark:border-indigo-500/20' : 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/5'}`}>
+                            <div key={record.id} className={`flex items-center justify-between p-5 rounded-2xl border ${record.check_in && !record.check_out ? 'bg-indigo-50 dark:bg-indigo-500/5 border-indigo-200 dark:border-indigo-500/20' : 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/5'}`}>
                                 <div>
                                     <p className="font-black text-lg tracking-tight text-gray-900 dark:text-white">{new Date(record.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                                     <div className="flex gap-4 mt-1">
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 dark:text-gray-400">
                                             <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-                                            IN: {record.in_time ? new Date(record.in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (record.check_in_time ? new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A')}
+                                            IN: {record.check_in ? new Date(record.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 border-l border-gray-300 dark:border-white/10 pl-4">
                                             <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                                            OUT: {record.out_time ? new Date(record.out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (record.in_time && !record.out_time ? 'Dutying...' : 'N/A')}
+                                            OUT: {record.check_out ? new Date(record.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (record.check_in ? 'Dutying...' : 'N/A')}
                                         </div>
                                     </div>
                                 </div>

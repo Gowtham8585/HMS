@@ -2,26 +2,40 @@ import { useState, useEffect } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { useNavigate } from "react-router-dom";
+import { Trash2, Calendar, Clock, User, UserCheck } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 
 export default function BookAppointment() {
     const [patients, setPatients] = useState([]);
     const [doctors, setDoctors] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [todaysList, setTodaysList] = useState([]);
     const navigate = useNavigate();
+
+    const [patientType, setPatientType] = useState('permanent'); // 'permanent' | 'temporary'
+    const [tempPatient, setTempPatient] = useState({
+        full_name: '',
+        phone: '',
+        age: '',
+        gender: 'Male',
+        email: '',
+        password: ''
+    });
 
     const [formData, setFormData] = useState({
         patient_id: '',
         doctor_id: '',
         appointment_date: new Date().toISOString().split('T')[0],
+        appointment_time: '10:00',
         status: 'scheduled'
     });
 
     useEffect(() => {
         const load = async () => {
-            // Fetch patients from 'profiles' to show email (Login ID) for differentiation
-            const { data: p } = await supabase.from('profiles').select('id, name, email').eq('role', 'patient');
-            // Fetch doctors from 'profiles' to ensure we get the correct Auth UUID
-            const { data: d } = await supabase.from('profiles').select('id, name, specialization').eq('role', 'doctor');
+            // Fetch patients from 'patients' table
+            const { data: p } = await supabase.from('patients').select('id, full_name, email').order('full_name');
+            // Fetch doctors from 'doctors' table
+            const { data: d } = await supabase.from('doctors').select('id, specialization, full_name').order('full_name');
 
             if (p && p.length > 0) {
                 setPatients(p);
@@ -35,19 +49,107 @@ export default function BookAppointment() {
         load();
     }, [])
 
+    useEffect(() => {
+        loadTodaysAppointments();
+    }, [formData.appointment_date]);
+
+    const loadTodaysAppointments = async () => {
+        const { data } = await supabase
+            .from('appointments')
+            .select(`
+                *,
+                patients (full_name, phone),
+                doctors (full_name, specialization)
+            `)
+            .eq('appointment_date', formData.appointment_date)
+            .order('appointment_time', { ascending: true });
+
+        if (data) setTodaysList(data);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
-        const { error } = await supabase.from('appointments').insert([formData]);
+        let finalPatientId = formData.patient_id;
+
+        // If Temporary (New Registration), create Auth User + Profile + Patient
+        if (patientType === 'temporary') {
+            try {
+                // 1. Setup isolated Supabase client to avoid logging out receptionist
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
+                const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+                    auth: { persistSession: false }
+                });
+
+                // 2. Sign Up User
+                const { data: authData, error: authError } = await tempClient.auth.signUp({
+                    email: tempPatient.email,
+                    password: tempPatient.password,
+                    options: {
+                        data: {
+                            displayName: tempPatient.full_name,
+                            role: 'patient'
+                        }
+                    }
+                });
+
+                if (authError) throw authError;
+
+                if (authData.user) {
+                    finalPatientId = authData.user.id; // Use the new Auth ID
+
+                    // 3. Create Profile (Public)
+                    const { error: profileError } = await supabase.from('profiles').upsert({
+                        user_id: finalPatientId,
+                        full_name: tempPatient.full_name,
+                        email: tempPatient.email,
+                        role: 'patient'
+                    });
+                    if (profileError) throw profileError;
+
+                    // 4. Create Patient Record (Private)
+                    const { error: patientError } = await supabase.from('patients').upsert({
+                        user_id: finalPatientId,
+                        full_name: tempPatient.full_name,
+                        phone: tempPatient.phone,
+                        date_of_birth: `${new Date().getFullYear() - parseInt(tempPatient.age || 25)}-01-01`,
+                        gender: tempPatient.gender.toLowerCase(),
+                        email: tempPatient.email
+                    });
+                    if (patientError) throw patientError;
+                }
+
+            } catch (err) {
+                alert("Error registering new patient: " + err.message);
+                setLoading(false);
+                return;
+            }
+        }
+
+        const { error } = await supabase.from('appointments').insert([{
+            ...formData,
+            patient_id: finalPatientId // Use existing ID or new Auth ID
+        }]);
 
         if (!error) {
-            alert("✔ Appointment Booked!");
-            navigate("/receptionist");
+            alert("✔ Appointment Booked & Patient Registered!");
+            loadTodaysAppointments();
+            if (patientType === 'temporary') {
+                // Reset temp form
+                setTempPatient({ full_name: '', phone: '', age: '', gender: 'Male', email: '', password: '' });
+            }
         } else {
             alert("Error: " + error.message);
         }
         setLoading(false);
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm("Cancel this appointment?")) return;
+        const { error } = await supabase.from('appointments').delete().eq('id', id);
+        if (!error) loadTodaysAppointments();
     };
 
     const inputClasses = "w-full p-4 bg-gray-50 dark:bg-white/5 border-2 border-gray-200 dark:border-white/10 rounded-xl text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 outline-none transition-all text-gray-900 dark:text-white";
@@ -55,52 +157,176 @@ export default function BookAppointment() {
 
     return (
         <Layout title="Book Appointment">
-            <div className="max-w-xl mx-auto">
-                <form onSubmit={handleSubmit} className="glass-card bg-white dark:bg-white/5 p-6 sm:p-8 rounded-xl shadow-md space-y-6 border border-gray-200 dark:border-white/10">
-                    <div>
-                        <label className={labelClasses}>Select Patient</label>
-                        {patients.length > 0 ? (
-                            <select
-                                className={inputClasses}
-                                style={{ colorScheme: 'light dark' }}
-                                onChange={e => setFormData({ ...formData, patient_id: e.target.value })}
-                            >
-                                {patients.map(p => <option key={p.id} value={p.id}>{p.name} {p.email ? `(${p.email})` : ''}</option>)}
-                            </select>
-                        ) : (
-                            <p className="text-red-500">No patients found. Please register a patient first.</p>
-                        )}
-                    </div>
-                    <div>
-                        <label className={labelClasses}>Select Doctor</label>
-                        {doctors.length > 0 ? (
-                            <select
-                                className={inputClasses}
-                                style={{ colorScheme: 'light dark' }}
-                                onChange={e => setFormData({ ...formData, doctor_id: e.target.value })}
-                            >
-                                {doctors.map(d => <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>)}
-                            </select>
-                        ) : <p className="text-red-500">No doctors available.</p>}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+                {/* Booking Form */}
+                <div>
+                    <div className="bg-white dark:bg-white/5 p-6 sm:p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-white/10 sticky top-6">
+                        <h2 className="text-2xl font-black mb-6 flex items-center gap-3 text-gray-900 dark:text-white">
+                            <Calendar className="text-blue-600" /> New Booking
+                        </h2>
 
+                        {/* Patient Type Toggle */}
+                        <div className="flex bg-gray-100 dark:bg-white/10 p-1 rounded-xl mb-6">
+                            <button
+                                type="button"
+                                onClick={() => setPatientType('permanent')}
+                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${patientType === 'permanent' ? 'bg-white dark:bg-gray-800 shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                            >
+                                Existing Patient
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPatientType('temporary')}
+                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${patientType === 'temporary' ? 'bg-white dark:bg-gray-800 shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                            >
+                                New Registration
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-6">
+
+                            {/* Conditional Patient Input */}
+                            {patientType === 'permanent' ? (
+                                <div>
+                                    <label className={labelClasses}>Select Patient</label>
+                                    {patients.length > 0 ? (
+                                        <select
+                                            className={inputClasses}
+                                            style={{ colorScheme: 'light dark' }}
+                                            onChange={e => setFormData({ ...formData, patient_id: e.target.value })}
+                                            value={formData.patient_id}
+                                        >
+                                            {patients.map(p => <option key={p.id} value={p.id}>{p.full_name || p.name} {p.email ? `(${p.email})` : ''}</option>)}
+                                        </select>
+                                    ) : (
+                                        <p className="text-red-500">No patients found. Please register a patient first.</p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 border-l-4 border-blue-500 pl-4 py-2 bg-blue-50/50 dark:bg-blue-500/5 rounded-r-xl">
+                                    <h3 className="font-bold text-sm text-blue-600 uppercase tracking-widest mb-2">New Patient Details</h3>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2">
+                                            <label className={labelClasses}>Full Name</label>
+                                            <input required className={inputClasses} placeholder="John Doe" value={tempPatient.full_name} onChange={e => setTempPatient({ ...tempPatient, full_name: e.target.value })} />
+                                        </div>
+
+                                        <div>
+                                            <label className={labelClasses}>Email (for Login)</label>
+                                            <input required type="email" className={inputClasses} placeholder="patient@example.com" value={tempPatient.email} onChange={e => setTempPatient({ ...tempPatient, email: e.target.value })} />
+                                        </div>
+                                        <div>
+                                            <label className={labelClasses}>Password</label>
+                                            <input required type="password" className={inputClasses} placeholder="******" value={tempPatient.password} onChange={e => setTempPatient({ ...tempPatient, password: e.target.value })} />
+                                        </div>
+
+                                        <div>
+                                            <label className={labelClasses}>Age</label>
+                                            <input required type="number" className={inputClasses} placeholder="25" value={tempPatient.age} onChange={e => setTempPatient({ ...tempPatient, age: e.target.value })} />
+                                        </div>
+                                        <div>
+                                            <label className={labelClasses}>Phone</label>
+                                            <input required type="tel" className={inputClasses} placeholder="+91..." value={tempPatient.phone} onChange={e => setTempPatient({ ...tempPatient, phone: e.target.value })} />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className={labelClasses}>Gender</label>
+                                            <select className={inputClasses} value={tempPatient.gender} onChange={e => setTempPatient({ ...tempPatient, gender: e.target.value })}>
+                                                <option>Male</option>
+                                                <option>Female</option>
+                                                <option>Other</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className={labelClasses}>Select Doctor</label>
+                                {doctors.length > 0 ? (
+                                    <select
+                                        className={inputClasses}
+                                        style={{ colorScheme: 'light dark' }}
+                                        onChange={e => setFormData({ ...formData, doctor_id: e.target.value })}
+                                        value={formData.doctor_id}
+                                    >
+                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.full_name || d.name} ({d.specialization})</option>)}
+                                    </select>
+                                ) : <p className="text-red-500">No doctors available.</p>}
+
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className={labelClasses}>Date</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        className={inputClasses}
+                                        value={formData.appointment_date}
+                                        onChange={e => setFormData({ ...formData, appointment_date: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className={labelClasses}>Time</label>
+                                    <input
+                                        type="time"
+                                        required
+                                        className={inputClasses}
+                                        value={formData.appointment_time}
+                                        onChange={e => setFormData({ ...formData, appointment_time: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                disabled={loading || (patientType === 'permanent' && patients.length === 0)}
+                                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-xl mt-4 hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50"
+                            >
+                                {loading ? "Booking..." : "CONFIRM BOOKING"}
+                            </button>
+                        </form>
                     </div>
-                    <div>
-                        <label className={labelClasses}>Appointment Date</label>
-                        <input
-                            type="date"
-                            required
-                            className={inputClasses}
-                            value={formData.appointment_date}
-                            onChange={e => setFormData({ ...formData, appointment_date: e.target.value })}
-                        />
-                    </div>
-                    <button
-                        disabled={loading || patients.length === 0}
-                        className="w-full bg-blue-600 text-white font-bold py-4 rounded-lg text-xl mt-4 hover:bg-blue-700 active:scale-95 transition-all shadow-lg disabled:opacity-50"
-                    >
-                        {loading ? "Booking..." : "BOOK NOW"}
-                    </button>
-                </form>
+                </div>
+
+                {/* Queue List */}
+                <div>
+                    <h2 className="text-2xl font-black mb-6 flex items-center gap-3 text-gray-900 dark:text-white px-2">
+                        <UserCheck className="text-emerald-600" /> Today's Queue
+                    </h2>
+
+                    {todaysList.length === 0 ? (
+                        <div className="text-center p-12 bg-gray-50 dark:bg-white/5 rounded-3xl border-2 border-dashed border-gray-200 dark:border-white/10">
+                            <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
+                            <p className="text-gray-500 font-bold opacity-60">No appointments for this date.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {todaysList.map((app, index) => (
+                                <div key={app.id} className="bg-white dark:bg-white/5 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center group hover:scale-[1.02] transition-transform">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-black text-xl">
+                                            {index + 1}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white text-lg">{app.patients?.full_name}</h4>
+                                            <div className="flex items-center gap-3 text-xs font-bold text-gray-400 uppercase tracking-wide">
+                                                <span className="flex items-center gap-1"><Clock size={12} /> {app.appointment_time?.slice(0, 5)}</span>
+                                                <span className="flex items-center gap-1 text-blue-500"><User size={12} /> {app.doctors?.full_name}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDelete(app.id)}
+                                        className="p-3 bg-red-50 text-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-red-100 hover:text-red-700"
+                                        title="Cancel Appointment"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         </Layout>
     )
