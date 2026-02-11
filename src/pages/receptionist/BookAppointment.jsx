@@ -12,7 +12,7 @@ export default function BookAppointment() {
     const [todaysList, setTodaysList] = useState([]);
     const navigate = useNavigate();
 
-    const [patientType, setPatientType] = useState('permanent'); // 'permanent' | 'temporary'
+    const [patientType, setPatientType] = useState('existing'); // 'existing' | 'new_permanent' | 'new_temporary'
     const [tempPatient, setTempPatient] = useState({
         full_name: '',
         phone: '',
@@ -32,18 +32,22 @@ export default function BookAppointment() {
 
     useEffect(() => {
         const load = async () => {
-            // Fetch patients from 'patients' table
-            const { data: p } = await supabase.from('patients').select('id, full_name, email').order('full_name');
-            // Fetch doctors from 'doctors' table
-            const { data: d } = await supabase.from('doctors').select('id, specialization, full_name').order('full_name');
+            // Fetch ONLY PERMANENT patients (with user_id)
+            const { data: p } = await supabase.from('patients').select('id, full_name, email').not('user_id', 'is', null).order('full_name');
+            // Fetch doctors from PROFILES table
+            const { data: d } = await supabase
+                .from('profiles')
+                .select('id, specialization, full_name')
+                .eq('role', 'doctor')
+                .order('full_name');
 
-            if (p && p.length > 0) {
+            if (p) {
                 setPatients(p);
-                setFormData(prev => ({ ...prev, patient_id: p[0].id }));
+                if (p.length > 0) setFormData(prev => ({ ...prev, patient_id: p[0].id }));
             }
-            if (d && d.length > 0) {
+            if (d) {
                 setDoctors(d);
-                setFormData(prev => ({ ...prev, doctor_id: d[0].id })); // Select first doctor by default
+                if (d.length > 0) setFormData(prev => ({ ...prev, doctor_id: d[0].id }));
             }
         }
         load();
@@ -73,10 +77,10 @@ export default function BookAppointment() {
 
         let finalPatientId = formData.patient_id;
 
-        // If Temporary (New Registration), create Auth User + Profile + Patient
-        if (patientType === 'temporary') {
-            try {
-                // 1. Setup isolated Supabase client to avoid logging out receptionist
+        try {
+            // CASE 1: New Permanent Patient (Auth User + Profile + Patient)
+            if (patientType === 'new_permanent') {
+                // 1. Setup isolated Supabase client
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
                 const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -98,9 +102,9 @@ export default function BookAppointment() {
                 if (authError) throw authError;
 
                 if (authData.user) {
-                    finalPatientId = authData.user.id; // Use the new Auth ID
+                    finalPatientId = authData.user.id;
 
-                    // 3. Create Profile (Public)
+                    // 3. Create Profile
                     const { error: profileError } = await supabase.from('profiles').upsert({
                         user_id: finalPatientId,
                         full_name: tempPatient.full_name,
@@ -109,41 +113,60 @@ export default function BookAppointment() {
                     });
                     if (profileError) throw profileError;
 
-                    // 4. Create Patient Record (Private)
+                    // 4. Create Patient Record
                     const { error: patientError } = await supabase.from('patients').upsert({
                         user_id: finalPatientId,
                         full_name: tempPatient.full_name,
                         phone: tempPatient.phone,
                         date_of_birth: `${new Date().getFullYear() - parseInt(tempPatient.age || 25)}-01-01`,
                         gender: tempPatient.gender.toLowerCase(),
-                        email: tempPatient.email
+                        email: tempPatient.email,
+                        patient_type: 'permanent'
                     });
                     if (patientError) throw patientError;
                 }
-
-            } catch (err) {
-                alert("Error registering new patient: " + err.message);
-                setLoading(false);
-                return;
             }
-        }
+            // CASE 2: New Temporary Patient (No Auth, No Profile, just Patient record with NULL user_id)
+            else if (patientType === 'new_temporary') {
+                const { data: newPatient, error: createError } = await supabase
+                    .from('patients')
+                    .insert([{
+                        user_id: null, // Explicitly NULL
+                        full_name: tempPatient.full_name,
+                        phone: tempPatient.phone,
+                        date_of_birth: `${new Date().getFullYear() - parseInt(tempPatient.age || 25)}-01-01`,
+                        gender: tempPatient.gender.toLowerCase(),
+                        patient_type: 'temporary'
+                    }])
+                    .select()
+                    .single();
 
-        const { error } = await supabase.from('appointments').insert([{
-            ...formData,
-            patient_id: finalPatientId // Use existing ID or new Auth ID
-        }]);
+                if (createError) throw createError;
+                finalPatientId = newPatient.id;
+            }
 
-        if (!error) {
-            alert("✔ Appointment Booked & Patient Registered!");
+            // BOOK APPOINTMENT
+            const { error } = await supabase.from('appointments').insert([{
+                ...formData,
+                patient_id: finalPatientId
+            }]);
+
+            if (error) throw error;
+
+            alert("✔ Appointment Booked!");
             loadTodaysAppointments();
-            if (patientType === 'temporary') {
-                // Reset temp form
+
+            // Reset temp form if needed
+            if (patientType !== 'existing') {
                 setTempPatient({ full_name: '', phone: '', age: '', gender: 'Male', email: '', password: '' });
+                // Reset to existing view to avoid confusion? or keep as is.
             }
-        } else {
-            alert("Error: " + error.message);
+
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleDelete = async (id) => {
@@ -166,27 +189,34 @@ export default function BookAppointment() {
                         </h2>
 
                         {/* Patient Type Toggle */}
-                        <div className="flex bg-gray-100 dark:bg-white/10 p-1 rounded-xl mb-6">
+                        <div className="flex flex-wrap gap-2 bg-gray-100 dark:bg-white/10 p-2 rounded-xl mb-6">
                             <button
                                 type="button"
-                                onClick={() => setPatientType('permanent')}
-                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${patientType === 'permanent' ? 'bg-white dark:bg-gray-800 shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                                onClick={() => setPatientType('existing')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${patientType === 'existing' ? 'bg-white dark:bg-gray-800 shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                             >
-                                Existing Patient
+                                Existing
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setPatientType('temporary')}
-                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${patientType === 'temporary' ? 'bg-white dark:bg-gray-800 shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                                onClick={() => setPatientType('new_permanent')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${patientType === 'new_permanent' ? 'bg-white dark:bg-gray-800 shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                             >
-                                New Registration
+                                New (Perm)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPatientType('new_temporary')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${patientType === 'new_temporary' ? 'bg-white dark:bg-gray-800 shadow-sm text-amber-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                            >
+                                New (Temp)
                             </button>
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-6">
 
                             {/* Conditional Patient Input */}
-                            {patientType === 'permanent' ? (
+                            {patientType === 'existing' ? (
                                 <div>
                                     <label className={labelClasses}>Select Patient</label>
                                     {patients.length > 0 ? (
@@ -203,8 +233,10 @@ export default function BookAppointment() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 border-l-4 border-blue-500 pl-4 py-2 bg-blue-50/50 dark:bg-blue-500/5 rounded-r-xl">
-                                    <h3 className="font-bold text-sm text-blue-600 uppercase tracking-widest mb-2">New Patient Details</h3>
+                                <div className={`space-y-4 animate-in fade-in slide-in-from-top-2 border-l-4 pl-4 py-2 rounded-r-xl ${patientType === 'new_permanent' ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/5' : 'border-amber-500 bg-amber-50/50 dark:bg-amber-500/5'}`}>
+                                    <h3 className={`font-bold text-sm uppercase tracking-widest mb-2 ${patientType === 'new_permanent' ? 'text-blue-600' : 'text-amber-600'}`}>
+                                        {patientType === 'new_permanent' ? 'New Permanent Patient (With Login)' : 'New Temporary Patient (Quick)'}
+                                    </h3>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="md:col-span-2">
@@ -212,14 +244,18 @@ export default function BookAppointment() {
                                             <input required className={inputClasses} placeholder="John Doe" value={tempPatient.full_name} onChange={e => setTempPatient({ ...tempPatient, full_name: e.target.value })} />
                                         </div>
 
-                                        <div>
-                                            <label className={labelClasses}>Email (for Login)</label>
-                                            <input required type="email" className={inputClasses} placeholder="patient@example.com" value={tempPatient.email} onChange={e => setTempPatient({ ...tempPatient, email: e.target.value })} />
-                                        </div>
-                                        <div>
-                                            <label className={labelClasses}>Password</label>
-                                            <input required type="password" className={inputClasses} placeholder="******" value={tempPatient.password} onChange={e => setTempPatient({ ...tempPatient, password: e.target.value })} />
-                                        </div>
+                                        {patientType === 'new_permanent' && (
+                                            <>
+                                                <div>
+                                                    <label className={labelClasses}>Email (for Login)</label>
+                                                    <input required type="email" className={inputClasses} placeholder="patient@example.com" value={tempPatient.email} onChange={e => setTempPatient({ ...tempPatient, email: e.target.value })} />
+                                                </div>
+                                                <div>
+                                                    <label className={labelClasses}>Password</label>
+                                                    <input required type="password" className={inputClasses} placeholder="******" value={tempPatient.password} onChange={e => setTempPatient({ ...tempPatient, password: e.target.value })} />
+                                                </div>
+                                            </>
+                                        )}
 
                                         <div>
                                             <label className={labelClasses}>Age</label>

@@ -9,9 +9,12 @@ export default function RegisterPatient() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState(false);
+    const [lastRegisteredEmail, setLastRegisteredEmail] = useState("");
 
     const [formData, setFormData] = useState({
         name: "",
+        email: "",
+        password: "",
         age: "",
         gender: "Male",
         phone: "",
@@ -46,8 +49,8 @@ export default function RegisterPatient() {
 
             // 2. Sign Up User (Auth)
             const { data: authData, error: authError } = await tempClient.auth.signUp({
-                email: tempEmail,
-                password: tempPassword,
+                email: formData.email,
+                password: formData.password,
                 options: {
                     data: {
                         displayName: formData.name,
@@ -63,7 +66,7 @@ export default function RegisterPatient() {
                 const { error: profileError } = await supabase.from('profiles').upsert({
                     user_id: authData.user.id, // Auth ID goes here
                     full_name: formData.name,
-                    email: tempEmail,
+                    email: formData.email,
                     role: 'patient'
                 });
 
@@ -73,22 +76,29 @@ export default function RegisterPatient() {
                 const { error: patientError } = await supabase.from('patients').upsert({
                     user_id: authData.user.id, // Auth ID goes here, let DB generate 'id'
                     full_name: formData.name,
-                    date_of_birth: `${new Date().getFullYear() - parseInt(formData.age)}-01-01`, // Approx DOB from Age
+                    date_of_birth: `${new Date().getFullYear() - parseInt(formData.age || 20)}-01-01`, // Approx DOB from Age
                     gender: formData.gender.toLowerCase(),
                     phone: formData.phone,
                     address: formData.address,
                     blood_group: formData.bloodGroup,
                     medical_history: formData.medicalHistory,
                     allergies: formData.allergies,
-                    emergency_contact: formData.emergencyContact
+                    emergency_contact: formData.emergencyContact,
+                    patient_type: 'permanent',
+                    email: formData.email
                 });
 
                 if (patientError) throw patientError;
 
+
+                if (patientError) throw patientError;
+
+                console.log('Registered successfully:', formData.email);
+                setLastRegisteredEmail(formData.email);
                 setSuccess(true);
                 // Reset Form
                 setFormData({
-                    name: "", age: "", gender: "Male", phone: "", address: "",
+                    name: "", email: "", password: "", age: "", gender: "Male", phone: "", address: "",
                     bloodGroup: "O+", medicalHistory: "", allergies: "None", emergencyContact: ""
                 });
             }
@@ -115,7 +125,7 @@ export default function RegisterPatient() {
                             </div>
                             <div>
                                 <h3 className="font-bold text-lg">Patient Registered Successfully!</h3>
-                                <p className="opacity-80 text-sm">Patient ID and profile have been created.</p>
+                                <p className="opacity-80 text-sm">Account created for {lastRegisteredEmail}.</p>
                             </div>
                         </div>
                         <button onClick={() => setSuccess(false)} className="px-4 py-2 bg-white dark:bg-black/20 rounded-lg font-bold text-sm hover:bg-green-100 dark:hover:bg-green-500/20 transition-colors">
@@ -150,6 +160,14 @@ export default function RegisterPatient() {
                                 <div className="md:col-span-2">
                                     <label className={labelClasses}>Full Name</label>
                                     <input required className={inputClasses} placeholder="John Doe" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                                </div>
+                                <div className="md:col-span-1">
+                                    <label className={labelClasses}>Email (for Login)</label>
+                                    <input required type="email" className={inputClasses} placeholder="patient@example.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                                </div>
+                                <div className="md:col-span-1">
+                                    <label className={labelClasses}>Password</label>
+                                    <input required type="password" className={inputClasses} placeholder="******" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} />
                                 </div>
                                 <div>
                                     <label className={labelClasses}>Age</label>

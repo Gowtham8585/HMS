@@ -1,20 +1,25 @@
 import { useState, useEffect } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { Building2, Save, MapPin, Phone, Hospital, AlertCircle } from "lucide-react";
+import { Building2, Save, MapPin, Phone, Hospital, AlertCircle, Users, Stethoscope, UserPlus, Trash2, Edit } from "lucide-react";
 
 export default function HospitalSettings() {
+    const [activeTab, setActiveTab] = useState('hospital'); // 'hospital', 'doctors', 'staff'
     const [settings, setSettings] = useState({
         hospital_name: "",
         address: "",
         contact_number: ""
     });
+    const [doctors, setDoctors] = useState([]);
+    const [staff, setStaff] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
 
     useEffect(() => {
         fetchSettings();
+        fetchDoctors();
+        fetchStaff();
     }, []);
 
     const fetchSettings = async () => {
@@ -30,6 +35,24 @@ export default function HospitalSettings() {
 
         if (data) setSettings(data);
         setLoading(false);
+    };
+
+    const fetchDoctors = async () => {
+        const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('role', 'doctor')
+            .order('full_name');
+        if (data) setDoctors(data);
+    };
+
+    const fetchStaff = async () => {
+        const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('role', 'staff')
+            .order('full_name');
+        if (data) setStaff(data);
     };
 
     const handleSave = async (e) => {
@@ -51,83 +74,214 @@ export default function HospitalSettings() {
 
     return (
         <Layout title="Hospital Setup">
-            <div className="max-w-2xl mx-auto py-10">
-                <div className="glass-card bg-white dark:bg-white/5 backdrop-blur-xl p-10 rounded-[2.5rem] shadow-2xl border border-gray-200 dark:border-white/10">
-                    <div className="flex items-center gap-4 mb-10 pb-8 border-b border-gray-100 dark:border-white/10">
-                        <div className="bg-blue-500/10 dark:bg-blue-500/20 p-4 rounded-2xl shadow-lg shadow-blue-500/10">
-                            <Hospital className="text-blue-600 dark:text-blue-400 w-8 h-8" />
-                        </div>
-                        <div>
-                            <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Clinic Profile</h2>
-                            <p className="text-gray-500 dark:text-white/50 font-medium">Configure your clinic's public identity</p>
-                        </div>
-                    </div>
-
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 font-medium">
-                            <AlertCircle size={20} />
-                            {error}
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSave} className="space-y-8">
-                        <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-white/60 uppercase tracking-widest ml-1">
-                                <Building2 size={14} /> Hospital / Clinic Name
-                            </label>
-                            <input
-                                required
-                                className="w-full p-5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 rounded-2xl outline-none transition-all text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/20"
-                                placeholder="Enter Hospital Name"
-                                value={settings.hospital_name}
-                                onChange={e => setSettings({ ...settings, hospital_name: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-white/60 uppercase tracking-widest ml-1">
-                                <MapPin size={14} /> Full Address
-                            </label>
-                            <textarea
-                                required
-                                className="w-full p-5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 rounded-2xl outline-none transition-all text-lg font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/20 h-32 resize-none"
-                                placeholder="Enter Full Address"
-                                value={settings.address}
-                                onChange={e => setSettings({ ...settings, address: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-white/60 uppercase tracking-widest ml-1">
-                                <Phone size={14} /> Contact Number
-                            </label>
-                            <input
-                                required
-                                className="w-full p-5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 rounded-2xl outline-none transition-all text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/20"
-                                placeholder="+91 xxxxx xxxxx"
-                                value={settings.contact_number}
-                                onChange={e => setSettings({ ...settings, contact_number: e.target.value })}
-                            />
-                        </div>
-
-                        <button
-                            disabled={saving}
-                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 rounded-2xl text-xl font-black shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mt-10"
-                        >
-                            <Save size={24} />
-                            {saving ? "SAVING DETAILS..." : "SAVE HOSPITAL SETTINGS"}
-                        </button>
-                    </form>
+            <div className="py-6 space-y-6">
+                {/* Tab Navigation */}
+                <div className="flex gap-4 border-b border-gray-200 dark:border-white/10">
+                    <button
+                        onClick={() => setActiveTab('hospital')}
+                        className={`px-6 py-3 font-bold flex items-center gap-2 transition-all border-b-2 ${activeTab === 'hospital'
+                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                    >
+                        <Hospital size={20} />
+                        Hospital Info
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('doctors')}
+                        className={`px-6 py-3 font-bold flex items-center gap-2 transition-all border-b-2 ${activeTab === 'doctors'
+                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                    >
+                        <Stethoscope size={20} />
+                        Doctors ({doctors.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('staff')}
+                        className={`px-6 py-3 font-bold flex items-center gap-2 transition-all border-b-2 ${activeTab === 'staff'
+                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                    >
+                        <Users size={20} />
+                        Staff ({staff.length})
+                    </button>
                 </div>
 
-                <div className="mt-8 p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 flex items-start gap-4 text-gray-500 dark:text-white/60 shadow-lg dark:shadow-none">
-                    <div className="bg-gray-100 dark:bg-white/10 p-2 rounded-full text-gray-600 dark:text-white/80">
-                        <Save size={16} />
+                {/* Hospital Settings Tab */}
+                {activeTab === 'hospital' && (
+                    <div className="max-w-2xl mx-auto">
+                        <div className="glass-card bg-white dark:bg-white/5 backdrop-blur-xl p-10 rounded-[2.5rem] shadow-2xl border border-gray-200 dark:border-white/10">
+                            <div className="flex items-center gap-4 mb-10 pb-8 border-b border-gray-100 dark:border-white/10">
+                                <div className="bg-blue-500/10 dark:bg-blue-500/20 p-4 rounded-2xl shadow-lg shadow-blue-500/10">
+                                    <Hospital className="text-blue-600 dark:text-blue-400 w-8 h-8" />
+                                </div>
+                                <div>
+                                    <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Clinic Profile</h2>
+                                    <p className="text-gray-500 dark:text-white/50 font-medium">Configure your clinic's public identity</p>
+                                </div>
+                            </div>
+
+                            {error && (
+                                <div className="mb-6 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 font-medium">
+                                    <AlertCircle size={20} />
+                                    {error}
+                                </div>
+                            )}
+
+                            <form onSubmit={handleSave} className="space-y-8">
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-white/60 uppercase tracking-widest ml-1">
+                                        <Building2 size={14} /> Hospital / Clinic Name
+                                    </label>
+                                    <input
+                                        required
+                                        className="w-full p-5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 rounded-2xl outline-none transition-all text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/20"
+                                        placeholder="Enter Hospital Name"
+                                        value={settings.hospital_name}
+                                        onChange={e => setSettings({ ...settings, hospital_name: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-white/60 uppercase tracking-widest ml-1">
+                                        <MapPin size={14} /> Full Address
+                                    </label>
+                                    <textarea
+                                        required
+                                        className="w-full p-5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 rounded-2xl outline-none transition-all text-lg font-medium text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/20 h-32 resize-none"
+                                        placeholder="Enter Full Address"
+                                        value={settings.address}
+                                        onChange={e => setSettings({ ...settings, address: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-white/60 uppercase tracking-widest ml-1">
+                                        <Phone size={14} /> Contact Number
+                                    </label>
+                                    <input
+                                        required
+                                        className="w-full p-5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-blue-500 rounded-2xl outline-none transition-all text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/20"
+                                        placeholder="+91 xxxxx xxxxx"
+                                        value={settings.contact_number}
+                                        onChange={e => setSettings({ ...settings, contact_number: e.target.value })}
+                                    />
+                                </div>
+
+                                <button
+                                    disabled={saving}
+                                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 rounded-2xl text-xl font-black shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mt-10"
+                                >
+                                    <Save size={24} />
+                                    {saving ? "SAVING DETAILS..." : "SAVE HOSPITAL SETTINGS"}
+                                </button>
+                            </form>
+                        </div>
+
+                        <div className="mt-8 p-6 bg-white dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 flex items-start gap-4 text-gray-500 dark:text-white/60 shadow-lg dark:shadow-none">
+                            <div className="bg-gray-100 dark:bg-white/10 p-2 rounded-full text-gray-600 dark:text-white/80">
+                                <Save size={16} />
+                            </div>
+                            <p className="text-sm font-medium">
+                                These details will appear on patient reports, bills, and the registration portal. Please ensure accuracy.
+                            </p>
+                        </div>
                     </div>
-                    <p className="text-sm font-medium">
-                        These details will appear on patient reports, bills, and the registration portal. Please ensure accuracy.
-                    </p>
-                </div>
+                )}
+
+                {/* Doctors Tab */}
+                {activeTab === 'doctors' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-blue-500/10 dark:bg-blue-500/20 p-3 rounded-2xl">
+                                    <Stethoscope className="text-blue-600 dark:text-blue-400 w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Doctors</h2>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">{doctors.length} registered doctors</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {doctors.map(doctor => (
+                                <div key={doctor.id} className="glass-card bg-white dark:bg-white/5 p-6 rounded-2xl border border-gray-200 dark:border-white/10 hover:border-blue-500/30 transition-all">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
+                                                <Stethoscope className="text-blue-600 dark:text-blue-400 w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-gray-900 dark:text-white">{doctor.full_name}</h3>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">{doctor.specialization || 'General Physician'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                            <Phone size={14} />
+                                            <span>{doctor.phone || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {doctors.length === 0 && (
+                                <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+                                    No doctors registered yet
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Staff Tab */}
+                {activeTab === 'staff' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-green-500/10 dark:bg-green-500/20 p-3 rounded-2xl">
+                                    <Users className="text-green-600 dark:text-green-400 w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Staff Members</h2>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">{staff.length} registered staff</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {staff.map(member => (
+                                <div key={member.id} className="glass-card bg-white dark:bg-white/5 p-6 rounded-2xl border border-gray-200 dark:border-white/10 hover:border-green-500/30 transition-all">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full bg-green-500/10 dark:bg-green-500/20 flex items-center justify-center">
+                                                <UserPlus className="text-green-600 dark:text-green-400 w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-gray-900 dark:text-white">{member.full_name}</h3>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{member.role}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                            <Phone size={14} />
+                                            <span>{member.phone || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {staff.length === 0 && (
+                                <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+                                    No staff members registered yet
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </Layout>
     );

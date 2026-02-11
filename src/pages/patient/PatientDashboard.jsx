@@ -25,26 +25,31 @@ export default function PatientDashboard() {
         if (showLoading) setLoading(true);
 
         try {
-            // Parallel fetching for speed and isolation
-            const [pRes, hRes, appRes, billRes, prescRes] = await Promise.all([
-                supabase.from('patients').select('*').eq('id', user.id).maybeSingle(),
-                supabase.from('hospital_settings').select('*').maybeSingle(),
-                // Fix: Join 'profiles' alias 'doctors' because doctor_id links to profiles, not doctors directory table
-                supabase.from('appointments').select('*, doctors:profiles(name, specialization)').eq('patient_id', user.id).order('appointment_date', { ascending: false }).limit(5),
-                supabase.from('bills').select('*').eq('patient_id', user.id).order('created_at', { ascending: false }).limit(5),
-                supabase.from('prescriptions').select('*, doctors:profiles(name), prescription_items(*, medicines(medicine_name))').eq('patient_id', user.id).order('created_at', { ascending: false }).limit(10)
+            // 1. Fetch Patient & Hospital Info first
+            console.log('Fetching data for User ID:', user.id);
+            const [pRes, hRes] = await Promise.all([
+                supabase.from('patients').select('*').eq('user_id', user.id).maybeSingle(),
+                supabase.from('hospital_settings').select('*').maybeSingle()
             ]);
+            console.log('Patient Fetch Result:', pRes);
 
             if (pRes.data) setPatientInfo(pRes.data);
             if (hRes.data) setHospitalInfo(hRes.data);
 
-            if (appRes.data) setAppointments(appRes.data);
-            else if (appRes.error) console.warn("Appointments Fetch Error:", appRes.error);
+            const pid = pRes.data?.id;
 
-            if (billRes.data) setBills(billRes.data);
+            if (pid) {
+                // 2. Fetch related records using correct Patient UUID
+                const [appRes, billRes, prescRes] = await Promise.all([
+                    supabase.from('appointments').select('*, doctors:profiles(full_name, specialization)').eq('patient_id', pid).order('appointment_date', { ascending: false }).limit(5),
+                    supabase.from('bills').select('*').eq('patient_id', pid).order('created_at', { ascending: false }).limit(5),
+                    supabase.from('prescriptions').select('*, doctors:profiles(full_name), prescription_items(*, medicines(medicine_name))').eq('patient_id', pid).order('created_at', { ascending: false }).limit(10)
+                ]);
 
-            if (prescRes.data) setMedicines(prescRes.data);
-            else if (prescRes.error) console.warn("Prescriptions Fetch Error:", prescRes.error);
+                if (appRes.data) setAppointments(appRes.data);
+                if (billRes.data) setBills(billRes.data);
+                if (prescRes.data) setMedicines(prescRes.data);
+            }
 
         } catch (e) {
             console.error("Global Fetch Error:", e);
@@ -90,7 +95,7 @@ export default function PatientDashboard() {
             });
 
             if (upcoming) {
-                setUpcomingAlert(`🔔 Reminder: You have an appointment with Dr. ${upcoming.doctors?.name || 'Doctor'} in ${Math.ceil((new Date(upcoming.appointment_date) - now) / 1000 / 60)} minutes!`);
+                setUpcomingAlert(`🔔 Reminder: You have an appointment with Dr. ${upcoming.doctors?.full_name || 'Doctor'} in ${Math.ceil((new Date(upcoming.appointment_date) - now) / 1000 / 60)} minutes!`);
             } else {
                 setUpcomingAlert(null);
             }
@@ -104,7 +109,7 @@ export default function PatientDashboard() {
     }, [showBookingModal]);
 
     const fetchDoctorsForBooking = async () => {
-        const { data } = await supabase.from('profiles').select('id, name, specialization').eq('role', 'doctor');
+        const { data } = await supabase.from('profiles').select('id, full_name, specialization').eq('role', 'doctor');
         if (data) {
             setBookingDoctors(data);
             if (data.length > 0 && !newBooking.doctor_id) {
@@ -117,10 +122,16 @@ export default function PatientDashboard() {
         e.preventDefault();
         setLoading(true);
         try {
+            const dateTime = newBooking.appointment_date;
+            const [datePart, timePart] = dateTime.split('T');
+
+            if (!patientInfo?.id) throw new Error("Patient record not found for this account. Please contact reception to link your profile.");
+
             const { error } = await supabase.from('appointments').insert({
-                patient_id: user.id,
+                patient_id: patientInfo.id,
                 doctor_id: newBooking.doctor_id,
-                appointment_date: newBooking.appointment_date,
+                appointment_date: datePart,
+                appointment_time: timePart,
                 status: 'scheduled'
             });
 
@@ -129,7 +140,8 @@ export default function PatientDashboard() {
             setShowBookingModal(false);
             fetchClientData(); // Refresh list
         } catch (err) {
-            alert("Error booking appointment: " + err.message);
+            console.error(err);
+            alert("Error: " + err.message);
         } finally {
             setLoading(false);
         }
@@ -226,7 +238,7 @@ export default function PatientDashboard() {
                                     {appointments.map(app => (
                                         <div key={app.id} className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-white/10 transition-all">
                                             <div>
-                                                <p className="font-bold text-gray-900 dark:text-white">Dr. {app.doctors?.name || "Consultant"}</p>
+                                                <p className="font-bold text-gray-900 dark:text-white">Dr. {app.doctors?.full_name || "Consultant"}</p>
                                                 <p className="text-sm opacity-60 text-gray-500 dark:text-gray-400">
                                                     {new Date(app.appointment_date).toLocaleDateString()} at {new Date(app.appointment_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </p>
@@ -297,7 +309,7 @@ export default function PatientDashboard() {
                                             <div className="flex justify-between items-start mb-4">
                                                 <div>
                                                     <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">
-                                                        Dr. {group.doctors?.name || "Consultant"}
+                                                        Dr. {group.doctors?.full_name || "Consultant"}
                                                     </p>
                                                     <p className="text-xs opacity-60 text-gray-500">{new Date(group.created_at).toLocaleDateString()}</p>
                                                 </div>
@@ -347,7 +359,7 @@ export default function PatientDashboard() {
                                         onChange={e => setNewBooking({ ...newBooking, doctor_id: e.target.value })}
                                     >
                                         {bookingDoctors.map(doc => (
-                                            <option key={doc.id} value={doc.id}>Dr. {doc.name} ({doc.specialization || 'General'})</option>
+                                            <option key={doc.id} value={doc.id}>Dr. {doc.full_name} ({doc.specialization || 'General'})</option>
                                         ))}
                                     </select>
                                 </div>

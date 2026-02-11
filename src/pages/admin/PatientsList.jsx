@@ -2,12 +2,23 @@ import { useState, useEffect } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 import { UserPlus, Search, Phone, History, Edit, Trash2, X } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 
 export default function PatientsList() {
     const [patients, setPatients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [editingPatient, setEditingPatient] = useState(null);
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [newPatient, setNewPatient] = useState({
+        full_name: '',
+        email: '',
+        password: '',
+        phone: '',
+        date_of_birth: '',
+        gender: 'Male',
+        medical_history: ''
+    });
 
     useEffect(() => {
         loadPatients();
@@ -31,9 +42,11 @@ export default function PatientsList() {
 
     async function loadPatients() {
         setLoading(true);
+        // Filter: Only show patients with a user_id (Permanent Patients with Login)
         const { data, error } = await supabase
             .from('patients')
             .select('*')
+            .not('user_id', 'is', null) // Only Permanent
             .order('created_at', { ascending: false });
 
         if (!error) setPatients(data);
@@ -48,6 +61,77 @@ export default function PatientsList() {
             alert("Error deleting patient: " + error.message);
         } else {
             loadPatients();
+        }
+    };
+
+    const handleAddPatient = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            // 1. Setup isolated Supabase client
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
+            const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+                auth: { persistSession: false }
+            });
+
+            // 2. Sign Up User
+            const { data: authData, error: authError } = await tempClient.auth.signUp({
+                email: newPatient.email,
+                password: newPatient.password,
+                options: {
+                    data: {
+                        displayName: newPatient.full_name,
+                        role: 'patient'
+                    }
+                }
+            });
+
+            if (authError) throw authError;
+
+            if (authData.user) {
+                const userId = authData.user.id;
+
+                // 3. Create Profile
+                const { error: profileError } = await supabase.from('profiles').upsert({
+                    user_id: userId,
+                    full_name: newPatient.full_name,
+                    email: newPatient.email,
+                    role: 'patient'
+                });
+                if (profileError) throw profileError;
+
+                // 4. Create Patient Record
+                const { error: patientError } = await supabase.from('patients').insert({
+                    user_id: userId,
+                    full_name: newPatient.full_name,
+                    phone: newPatient.phone,
+                    date_of_birth: newPatient.date_of_birth,
+                    gender: newPatient.gender.toLowerCase(),
+                    email: newPatient.email,
+                    medical_history: newPatient.medical_history,
+                    patient_type: 'permanent'
+                });
+                if (patientError) throw patientError;
+
+                alert("Patient created successfully!");
+                setShowAddModal(false);
+                setNewPatient({
+                    full_name: '',
+                    email: '',
+                    password: '',
+                    phone: '',
+                    date_of_birth: '',
+                    gender: 'Male',
+                    medical_history: ''
+                });
+                loadPatients();
+            }
+        } catch (error) {
+            alert("Error adding patient: " + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -92,10 +176,18 @@ export default function PatientsList() {
         <Layout title="Patient Records">
             <div className="py-6 space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h2 className="text-2xl font-bold opacity-80 flex items-center gap-2 text-gray-900 dark:text-white">
-                        <UserPlus className="text-emerald-500" />
-                        Registered Patients
-                    </h2>
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-2xl font-bold opacity-80 flex items-center gap-2 text-gray-900 dark:text-white">
+                            <UserPlus className="text-emerald-500" />
+                            Registered Patients
+                        </h2>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/20 text-sm font-bold uppercase tracking-wider transition-all"
+                        >
+                            + Add Patient
+                        </button>
+                    </div>
                     <div className="relative w-full md:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                         <input
@@ -245,6 +337,109 @@ export default function PatientsList() {
                                     </button>
                                     <button type="submit" className="flex-1 p-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-sm tracking-widest shadow-lg shadow-blue-500/20 transition-all">
                                         Save Changes
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+                {/* Add Patient Modal */}
+                {showAddModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="glass-card w-full max-w-lg p-8 rounded-3xl border border-gray-200 dark:border-white/10 shadow-2xl relative bg-white dark:bg-[#1a1c23] max-h-[90vh] overflow-y-auto custom-scrollbar">
+                            <button onClick={() => setShowAddModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-all text-gray-400 hover:text-gray-900 dark:hover:text-white">
+                                <X size={20} />
+                            </button>
+                            <h3 className="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-900 dark:text-white">
+                                <UserPlus className="text-emerald-500" />
+                                Add New Patient
+                            </h3>
+                            <form onSubmit={handleAddPatient} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Full Name</label>
+                                    <input
+                                        required
+                                        className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-white transition-all"
+                                        placeholder="John Doe"
+                                        value={newPatient.full_name}
+                                        onChange={e => setNewPatient({ ...newPatient, full_name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Email (Login)</label>
+                                        <input
+                                            required
+                                            type="email"
+                                            className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-white transition-all"
+                                            placeholder="john@example.com"
+                                            value={newPatient.email}
+                                            onChange={e => setNewPatient({ ...newPatient, email: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Password</label>
+                                        <input
+                                            required
+                                            type="password"
+                                            className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-white transition-all"
+                                            placeholder="******"
+                                            value={newPatient.password}
+                                            onChange={e => setNewPatient({ ...newPatient, password: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Date of Birth</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-white transition-all"
+                                            value={newPatient.date_of_birth}
+                                            onChange={e => setNewPatient({ ...newPatient, date_of_birth: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Gender</label>
+                                        <select
+                                            className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-white transition-all"
+                                            value={newPatient.gender}
+                                            onChange={e => setNewPatient({ ...newPatient, gender: e.target.value })}
+                                            style={{ colorScheme: 'light dark' }}
+                                        >
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Phone Number</label>
+                                    <input
+                                        required
+                                        type="tel"
+                                        className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-white transition-all"
+                                        placeholder="+91..."
+                                        value={newPatient.phone}
+                                        onChange={e => setNewPatient({ ...newPatient, phone: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold opacity-50 uppercase mb-1 text-gray-500 dark:text-white">Medical History</label>
+                                    <textarea
+                                        className="w-full p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 dark:text-white h-24 resize-none transition-all"
+                                        placeholder="Allergies, chronic conditions, etc."
+                                        value={newPatient.medical_history}
+                                        onChange={e => setNewPatient({ ...newPatient, medical_history: e.target.value })}
+                                    />
+                                </div>
+                                <div className="pt-4 flex gap-3">
+                                    <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 p-3 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 font-bold uppercase text-sm tracking-widest transition-all text-gray-500 dark:text-white">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" disabled={loading} className="flex-1 p-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase text-sm tracking-widest shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50">
+                                        {loading ? 'Creating...' : 'Create Patient'}
                                     </button>
                                 </div>
                             </form>

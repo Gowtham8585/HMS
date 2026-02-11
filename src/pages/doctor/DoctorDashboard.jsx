@@ -49,25 +49,51 @@ export default function DoctorDashboard() {
     }, [user]);
 
     const fetchAppointments = async () => {
-        // Fetch all active appointments ordered by latest date
-        const { data, error } = await supabase
-            .from('appointments')
-            .select(`
-            id,
-            appointment_date,
-            status,
-            patients (id, name, age, gender)
-        `)
-            .eq('doctor_id', user.id)
-            .in('status', ['scheduled', 'pending']) // Show both scheduled and pending
-            .order('appointment_date', { ascending: true }); // Soonest first
+        try {
+            // First, get the doctor's profile ID
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('role', 'doctor')
+                .single();
 
-        if (error) {
-            console.error(error);
-        } else {
-            setAppointments(data || []);
+            if (profileError) {
+                console.error('Profile fetch error:', profileError);
+                setLoading(false);
+                return;
+            }
+
+            if (!profileData) {
+                console.error('No doctor profile found for user:', user.id);
+                setLoading(false);
+                return;
+            }
+
+            // Fetch all active appointments using the profile ID
+            const { data, error } = await supabase
+                .from('appointments')
+                .select(`
+                id,
+                appointment_date,
+                appointment_time,
+                status,
+                patients (id, name, age, gender)
+            `)
+                .eq('doctor_id', profileData.id)
+                .in('status', ['scheduled', 'pending']) // Show both scheduled and pending
+                .order('appointment_date', { ascending: true }); // Soonest first
+
+            if (error) {
+                console.error('Appointments fetch error:', error);
+            } else {
+                setAppointments(data || []);
+            }
+        } catch (err) {
+            console.error('Unexpected error:', err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const openPrescribeModal = async () => {
@@ -170,6 +196,20 @@ export default function DoctorDashboard() {
     const savePrescription = async () => {
         setCreating(true);
         try {
+            // Get doctor's profile ID first
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('role', 'doctor')
+                .single();
+
+            if (profileError || !profileData) {
+                throw new Error('Doctor profile not found');
+            }
+
+            const doctorProfileId = profileData.id;
+
             // 1. Update medical history
             const medList = prescriptions
                 .map(p => {
@@ -211,7 +251,7 @@ ${medList || "None"}
 
             // 3. Create completed appointment record
             const { data: appt, error: apptError } = await supabase.from('appointments').insert({
-                doctor_id: user.id,
+                doctor_id: doctorProfileId,
                 patient_id: selectedPatient.id,
                 status: 'completed',
                 appointment_date: new Date().toISOString()
@@ -221,7 +261,7 @@ ${medList || "None"}
 
             // 4. Create structured Prescription Record (New DB Table - User Request)
             const { data: prescData, error: prescError } = await supabase.from('prescriptions').insert({
-                doctor_id: user.id,
+                doctor_id: doctorProfileId,
                 patient_id: selectedPatient.id,
                 appointment_id: appt.id,
                 notes: prescriptionNotes

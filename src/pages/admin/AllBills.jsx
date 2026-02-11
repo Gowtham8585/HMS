@@ -19,7 +19,7 @@ export default function AllBills() {
             .from('bills')
             .select(`
                 *,
-                patient:patient_id (name)
+                patient:patient_id (name, patient_type)
             `)
             .order('created_at', { ascending: false });
 
@@ -31,10 +31,13 @@ export default function AllBills() {
                 const pName = bill.patient_name || bill.patient?.name || 'Unknown Patient';
                 const pId = bill.patient_id || pName; // Fallback to name as key
 
+                const pType = bill.patient?.patient_type || (bill.patient_id ? 'permanent' : 'temporary');
+
                 if (!groups[pId]) {
                     groups[pId] = {
                         id: pId,
                         name: pName,
+                        type: pType,
                         bills: [],
                         totalSpent: 0,
                         lastVisit: bill.created_at
@@ -224,7 +227,12 @@ export default function AllBills() {
                                 ) : groupedBills.length > 0 ? groupedBills.map((group, index) => (
                                     <tr key={group.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                                         <td className="p-6 text-sm opacity-50 text-gray-500 dark:text-gray-400">{index + 1}</td>
-                                        <td className="p-6 font-bold text-lg text-gray-900 dark:text-white">{group.name}</td>
+                                        <td className="p-6 font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                                            {group.name}
+                                            {group.type === 'temporary' && (
+                                                <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-500/20">Temp</span>
+                                            )}
+                                        </td>
                                         <td className="p-6 text-center font-mono opacity-70">
                                             <span className="bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">{group.bills.length}</span>
                                         </td>
