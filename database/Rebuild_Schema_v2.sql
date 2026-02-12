@@ -34,6 +34,9 @@ CREATE TABLE public.profiles (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   address text,
+  per_day_salary numeric DEFAULT 0,
+  salary numeric DEFAULT 0,
+  payment_status text DEFAULT 'unpaid',
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -73,6 +76,9 @@ CREATE TABLE public.doctors (
   qualification text,
   experience_years integer,
   consultation_fee numeric,
+  per_day_salary numeric DEFAULT 0,
+  salary numeric DEFAULT 0,
+  payment_status text DEFAULT 'unpaid',
   available_days TEXT[], -- e.g. ['Mon', 'Tue']
   available_from time without time zone,
   available_to time without time zone,
@@ -182,6 +188,8 @@ CREATE TABLE public.staff (
   phone text,
   address text,
   salary numeric DEFAULT 0,
+  per_day_salary numeric DEFAULT 0,
+  payment_status text DEFAULT 'unpaid',
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   email text,
   CONSTRAINT staff_pkey PRIMARY KEY (id)

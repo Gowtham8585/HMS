@@ -6,10 +6,11 @@ import { Wallet, Users, Stethoscope, Search, DollarSign, Edit, CheckCircle, XCir
 export default function Payroll() {
     const [doctors, setDoctors] = useState([]);
     const [staff, setStaff] = useState([]);
+    const [workers, setWorkers] = useState([]); // Added workers state
     const [attendance, setAttendance] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
-    const [activeTab, setActiveTab] = useState('doctor'); // 'doctor' or 'staff'
+    const [activeTab, setActiveTab] = useState('doctor'); // 'doctor', 'staff', or 'worker'
     const [editingEmployee, setEditingEmployee] = useState(null);
 
     useEffect(() => {
@@ -22,9 +23,13 @@ export default function Payroll() {
         const { data: docData } = await supabase.from('doctors').select('*').order('name');
         setDoctors(docData || []);
 
-        // Load Staff (profiles with role coworker)
-        const { data: staffData } = await supabase.from('profiles').select('*').in('role', ['receptionist', 'coworker']).order('name');
+        // Load Staff (query dedicated staff table)
+        const { data: staffData } = await supabase.from('staff').select('*').order('name');
         setStaff(staffData || []);
+
+        // Load Workers
+        const { data: workerData } = await supabase.from('workers').select('*').order('name');
+        setWorkers(workerData || []);
 
         // Load Current Month Attendance
         const startOfMonth = new Date();
@@ -69,12 +74,15 @@ export default function Payroll() {
 
     const handleUpdateSalary = async (e) => {
         e.preventDefault();
-        const table = editingEmployee.type === 'doctor' ? 'doctors' : 'profiles';
+        let table = 'staff';
+        if (editingEmployee.type === 'doctor') table = 'doctors';
+        if (editingEmployee.type === 'worker') table = 'workers';
+
         const { error } = await supabase
             .from(table)
             .update({
-                per_day_salary: parseFloat(editingEmployee.per_day_salary),
-                salary: parseFloat(editingEmployee.salary), // Manual/Total
+                per_day_salary: parseFloat(editingEmployee.per_day_salary) || 0,
+                salary: parseFloat(editingEmployee.salary) || 0, // Manual/Total
                 payment_status: editingEmployee.payment_status
             })
             .eq('id', editingEmployee.id);
@@ -88,22 +96,25 @@ export default function Payroll() {
         }
     };
 
-    const filteredEmployees = (activeTab === 'doctor' ? doctors : staff).filter(e =>
+    const filteredEmployees = (
+        activeTab === 'doctor' ? doctors :
+            activeTab === 'worker' ? workers : staff
+    ).filter(e =>
         e.name?.toLowerCase().includes(search.toLowerCase())
     );
 
     const calculateTotal = () => {
-        return [...doctors, ...staff].reduce((acc, curr) => {
+        return [...doctors, ...staff, ...workers].reduce((acc, curr) => {
             const userId = curr.user_id || curr.id;
             const stats = getAttendanceStats(userId);
             const autoSalary = (curr.per_day_salary || 0) * stats.effectiveDays;
-            return acc + (autoSalary || parseFloat(curr.salary) || 0);
+            return acc + (parseFloat(curr.salary) || autoSalary || 0);
         }, 0);
     };
 
     const totalBudget = calculateTotal();
-    const paidCount = [...doctors, ...staff].filter(e => e.payment_status === 'paid').length;
-    const pendingCount = [...doctors, ...staff].length - paidCount;
+    const paidCount = [...doctors, ...staff, ...workers].filter(e => e.payment_status === 'paid').length;
+    const pendingCount = [...doctors, ...staff, ...workers].length - paidCount;
 
     return (
         <Layout title="Payroll Management">
@@ -165,6 +176,12 @@ export default function Payroll() {
                             >
                                 <Users size={16} /> Staff
                             </button>
+                            <button
+                                onClick={() => setActiveTab('worker')}
+                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${activeTab === 'worker' ? 'bg-orange-600 text-white shadow-lg' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                            >
+                                <Briefcase size={16} /> Workers
+                            </button>
                         </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -188,7 +205,7 @@ export default function Payroll() {
                                     <th className="p-6 font-bold uppercase tracking-wider text-[10px] opacity-40 text-gray-500 dark:text-white">Employee</th>
                                     <th className="p-6 font-bold uppercase tracking-wider text-[10px] opacity-40 text-gray-500 dark:text-white">Rate / Day</th>
                                     <th className="p-6 font-bold uppercase tracking-wider text-[10px] opacity-40 text-gray-500 dark:text-white">Attendance</th>
-                                    <th className="p-6 font-bold uppercase tracking-wider text-[10px] opacity-40 text-gray-500 dark:text-white">Calculated Yield</th>
+                                    <th className="p-6 font-bold uppercase tracking-wider text-[10px] opacity-40 text-gray-500 dark:text-white">Final Payout</th>
                                     <th className="p-6 font-bold uppercase tracking-wider text-[10px] opacity-40 text-right text-gray-500 dark:text-white">Status</th>
                                     <th className="p-6 font-bold uppercase tracking-wider text-[10px] opacity-40 text-right text-gray-500 dark:text-white">Edit</th>
                                 </tr>
@@ -199,19 +216,26 @@ export default function Payroll() {
                                 ) : filteredEmployees.length > 0 ? filteredEmployees.map((emp) => {
                                     const stats = getAttendanceStats(emp.user_id || emp.id);
                                     const autoSalary = (emp.per_day_salary || 0) * stats.effectiveDays;
+                                    const finalSalary = parseFloat(emp.salary) || autoSalary;
+                                    const isManual = !!parseFloat(emp.salary);
+
+                                    const roleLabel = activeTab === 'doctor'
+                                        ? (emp.specialization || 'Clinical Doctor')
+                                        : (activeTab === 'worker' ? (emp.role || 'Support Worker') : 'Support Staff');
+
                                     const displayName = emp.name?.startsWith('Dr.') ? emp.name : (activeTab === 'doctor' ? `Dr. ${emp.name}` : emp.name);
 
                                     return (
                                         <tr key={emp.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                                             <td className="p-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold border ${activeTab === 'doctor' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/20' : 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-500/20'}`}>
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold border ${activeTab === 'doctor' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/20' : (activeTab === 'worker' ? 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-100 dark:border-orange-500/20' : 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-500/20')}`}>
                                                         {emp.name?.charAt(0)}
                                                     </div>
                                                     <div>
                                                         <span className="font-bold text-lg block leading-none text-gray-900 dark:text-white">{displayName}</span>
                                                         <span className="text-[10px] opacity-40 font-black uppercase tracking-widest text-gray-500 dark:text-white">
-                                                            {activeTab === 'doctor' ? (emp.specialization || 'Clinical Doctor') : 'Support Staff'}
+                                                            {roleLabel}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -229,8 +253,10 @@ export default function Payroll() {
                                                 </p>
                                             </td>
                                             <td className="p-6">
-                                                <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">₹{autoSalary.toLocaleString()}</div>
-                                                <p className="text-[9px] font-bold opacity-30 uppercase tracking-widest text-gray-500 dark:text-white">Auto Estimate</p>
+                                                <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">₹{finalSalary.toLocaleString()}</div>
+                                                <p className="text-[9px] font-bold opacity-30 uppercase tracking-widest text-gray-500 dark:text-white">
+                                                    {isManual ? 'Manual Override' : 'Auto Estimate'}
+                                                </p>
                                             </td>
                                             <td className="p-6 text-right">
                                                 <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${emp.payment_status === 'paid' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400'}`}>

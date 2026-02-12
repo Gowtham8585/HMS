@@ -158,7 +158,7 @@ export default function PatientDashboard() {
                 )}
                 <div className="mb-8 flex justify-between items-end">
                     <div>
-                        <h2 className="text-2xl md:text-3xl font-black opacity-80 text-gray-900 dark:text-white">Hello, {patientInfo?.name || 'Patient'}! 👋</h2>
+                        <h2 className="text-2xl md:text-3xl font-black opacity-80 text-gray-900 dark:text-white">Hello, {patientInfo?.full_name || 'Patient'}! 👋</h2>
                         <p className="text-sm opacity-50 mt-1 text-gray-400">View your medical records and appointments</p>
                     </div>
                     <button onClick={() => fetchClientData(true)} className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
