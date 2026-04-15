@@ -1,0 +1,8 @@
+FROM docker:cli as docker-cli
+
+FROM jenkins/jenkins:lts
+USER root
+# Copy only the docker CLI executable (instantly). 
+# This avoids the incredibly slow 100MB download on apt-get updates.
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+USER root
