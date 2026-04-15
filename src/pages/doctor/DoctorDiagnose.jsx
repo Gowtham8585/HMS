@@ -234,7 +234,7 @@ ${medList || "None"}
         <Layout title="Patient Consultation">
             {/* Patient Info Card */}
             <div className="glass-card bg-white dark:bg-white/5 p-8 rounded-3xl shadow-lg border border-gray-200 dark:border-white/10 mb-8">
-                <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2">{appointment.patients.name}</h2>
+                <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2">{appointment.patients.full_name}</h2>
                 <div className="flex flex-wrap gap-4 text-lg text-gray-600 dark:text-gray-300 font-medium mb-6">
                     <span className="px-4 py-1 bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded-full">Age: {appointment.patients.age}</span>
                     <span className="px-4 py-1 bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 rounded-full">Gender: {appointment.patients.gender}</span>

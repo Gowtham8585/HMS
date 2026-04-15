@@ -23,28 +23,22 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                dir('/app') {
-                    echo 'Installing Node Dependencies...'
-                    sh 'npm install'
-                }
+                echo 'Installing Node Dependencies...'
+                sh 'npm install'
             }
         }
 
         stage('Run Linter') {
             steps {
-                dir('/app') {
-                    echo 'Linting the code...'
-                    sh 'npm run lint'
-                }
+                echo 'Linting the code...'
+                sh 'npm run lint'
             }
         }
 
         stage('Build React Frontend') {
             steps {
-                dir('/app') {
-                    echo 'Building Vite Application...'
-                    sh 'npm run build'
-                }
+                echo 'Building Vite Application...'
+                sh 'npm run build'
             }
         }
 

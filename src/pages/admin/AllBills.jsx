@@ -6,6 +6,7 @@ import { Receipt, DollarSign, Search, Trash2 } from "lucide-react";
 export default function AllBills() {
     const [groupedBills, setGroupedBills] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     const [selectedGroup, setSelectedGroup] = useState(null);
 
@@ -19,16 +20,22 @@ export default function AllBills() {
             .from('bills')
             .select(`
                 *,
-                patient:patient_id (name, patient_type)
+                patient:patient_id (full_name, patient_type)
             `)
             .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error fetching bills:", error);
+            setError(error);
+            // alert("Error loading billing history: " + error.message);
+        }
 
         if (!error && data) {
             // Group by Patient ID (or Name if ID missing)
             const groups = {};
 
             data.forEach(bill => {
-                const pName = bill.patient_name || bill.patient?.name || 'Unknown Patient';
+                const pName = bill.patient_name || bill.patient?.full_name || bill.patient?.name || 'Unknown Patient';
                 const pId = bill.patient_id || pName; // Fallback to name as key
 
                 const pType = bill.patient?.patient_type || (bill.patient_id ? 'permanent' : 'temporary');
@@ -222,37 +229,50 @@ export default function AllBills() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-white/5">
-                                {loading ? (
-                                    <tr><td colSpan="6" className="p-20 text-center text-gray-500 dark:text-gray-400">Loading records...</td></tr>
-                                ) : groupedBills.length > 0 ? groupedBills.map((group, index) => (
-                                    <tr key={group.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
-                                        <td className="p-6 text-sm opacity-50 text-gray-500 dark:text-gray-400">{index + 1}</td>
-                                        <td className="p-6 font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
-                                            {group.name}
-                                            {group.type === 'temporary' && (
-                                                <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-500/20">Temp</span>
-                                            )}
-                                        </td>
-                                        <td className="p-6 text-center font-mono opacity-70">
-                                            <span className="bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">{group.bills.length}</span>
-                                        </td>
-                                        <td className="p-6 text-right font-black text-lg text-emerald-600 dark:text-emerald-400">
-                                            ₹{group.totalSpent.toLocaleString()}
-                                        </td>
-                                        <td className="p-6 text-right opacity-60 text-sm text-gray-600 dark:text-gray-400">
-                                            {new Date(group.lastVisit).toLocaleDateString()}
-                                        </td>
-                                        <td className="p-6 text-right">
-                                            <button
-                                                onClick={() => setSelectedGroup(group)}
-                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all"
-                                            >
-                                                View History
-                                            </button>
+                                {error ? (
+                                    <tr>
+                                        <td colSpan="6" className="p-20 text-center text-red-500 font-bold bg-red-50 dark:bg-red-900/10">
+                                            {error.message || "Failed to load due to database error."}
+                                            <p className="text-xs font-normal opacity-70 mt-2">Try refreshing the page or check database permissions.</p>
                                         </td>
                                     </tr>
-                                )) : (
-                                    <tr><td colSpan="6" className="p-20 text-center text-gray-500 dark:text-gray-400">No records found.</td></tr>
+                                ) : loading ? (
+                                    <tr><td colSpan="6" className="p-20 text-center text-gray-500 dark:text-gray-400">Loading records...</td></tr>
+                                ) : groupedBills.length > 0 ? (
+                                    groupedBills.map((group, index) => (
+                                        <tr key={group.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                                            <td className="p-6 text-sm opacity-50 text-gray-500 dark:text-gray-400">{index + 1}</td>
+                                            <td className="p-6 font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                                                {group.name}
+                                                {group.type === 'temporary' && (
+                                                    <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-500/20">Temp</span>
+                                                )}
+                                            </td>
+                                            <td className="p-6 text-center font-mono opacity-70">
+                                                <span className="bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-lg text-gray-700 dark:text-gray-300">{group.bills.length}</span>
+                                            </td>
+                                            <td className="p-6 text-right font-black text-lg text-emerald-600 dark:text-emerald-400">
+                                                ₹{group.totalSpent.toLocaleString()}
+                                            </td>
+                                            <td className="p-6 text-right opacity-60 text-sm text-gray-600 dark:text-gray-400">
+                                                {new Date(group.lastVisit).toLocaleDateString()}
+                                            </td>
+                                            <td className="p-6 text-right">
+                                                <button
+                                                    onClick={() => setSelectedGroup(group)}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all"
+                                                >
+                                                    View History
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))) : (
+                                    <tr>
+                                        <td colSpan="6" className="p-20 text-center text-gray-500 dark:text-gray-400">
+                                            No billing records found.
+                                            <p className="text-xs mt-2 opacity-50">(If data exists, check database RLS policies)</p>
+                                        </td>
+                                    </tr>
                                 )}
                             </tbody>
                         </table>

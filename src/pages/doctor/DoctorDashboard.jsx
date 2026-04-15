@@ -50,27 +50,26 @@ export default function DoctorDashboard() {
 
     const fetchAppointments = async () => {
         try {
-            // First, get the doctor's profile ID
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
+            // First, get the doctor's table ID from doctors table using user_id
+            const { data: doctorData, error: doctorError } = await supabase
+                .from('doctors')
                 .select('id')
                 .eq('user_id', user.id)
-                .eq('role', 'doctor')
                 .single();
 
-            if (profileError) {
-                console.error('Profile fetch error:', profileError);
+            if (doctorError) {
+                console.error('Doctors table fetch error:', doctorError);
                 setLoading(false);
                 return;
             }
 
-            if (!profileData) {
-                console.error('No doctor profile found for user:', user.id);
+            if (!doctorData) {
+                console.error('No doctor record found for user:', user.id);
                 setLoading(false);
                 return;
             }
 
-            // Fetch all active appointments using the profile ID
+            // Fetch all active appointments using the doctor ID
             const { data, error } = await supabase
                 .from('appointments')
                 .select(`
@@ -78,9 +77,9 @@ export default function DoctorDashboard() {
                 appointment_date,
                 appointment_time,
                 status,
-                patients (id, name, age, gender)
+                patients (id, full_name, age, gender)
             `)
-                .eq('doctor_id', profileData.id)
+                .eq('doctor_id', doctorData.id)
                 .in('status', ['scheduled', 'pending']) // Show both scheduled and pending
                 .order('appointment_date', { ascending: true }); // Soonest first
 
@@ -103,7 +102,7 @@ export default function DoctorDashboard() {
         setPrescriptionNotes("");
 
         if (allPatients.length === 0) {
-            const { data } = await supabase.from('patients').select('id, name, age, gender').order('name');
+            const { data } = await supabase.from('patients').select('id, full_name, age, gender').order('full_name');
             if (data) setAllPatients(data);
         }
         if (allMedicines.length === 0) {
@@ -196,19 +195,19 @@ export default function DoctorDashboard() {
     const savePrescription = async () => {
         setCreating(true);
         try {
-            // Get doctor's profile ID first
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
+            // Get doctor's ID from doctors table (linked to user_id)
+            const { data: doctorData, error: doctorError } = await supabase
+                .from('doctors')
                 .select('id')
                 .eq('user_id', user.id)
-                .eq('role', 'doctor')
                 .single();
 
-            if (profileError || !profileData) {
-                throw new Error('Doctor profile not found');
+            if (doctorError || !doctorData) {
+                console.error("Doctor lookup error:", doctorError);
+                throw new Error('Doctor profile not found in "doctors" table.');
             }
 
-            const doctorProfileId = profileData.id;
+            const doctorProfileId = doctorData.id;
 
             // 1. Update medical history
             const medList = prescriptions
@@ -297,7 +296,7 @@ ${medList || "None"}
     };
 
     const filteredPatients = allPatients.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase())
+        (p.full_name || "").toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     return (
@@ -344,7 +343,7 @@ ${medList || "None"}
                                     {app.status === 'completed' ? <CheckCircle size={24} /> : <Clock size={24} />}
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{app.patients?.name || "Unknown Patient"}</h3>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{app.patients?.full_name || "Unknown Patient"}</h3>
                                     <p className="text-gray-600 dark:text-gray-400 text-lg">
                                         {app.patients?.age} yrs • {app.patients?.gender}
                                         <span className="mx-2 text-gray-300">|</span>
@@ -409,7 +408,7 @@ ${medList || "None"}
                                                 className="w-full p-4 flex items-center justify-between bg-white dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-gray-100 dark:border-white/5 rounded-xl transition-all group text-left"
                                             >
                                                 <div>
-                                                    <h4 className="font-bold text-gray-900 dark:text-white text-lg group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{patient.name}</h4>
+                                                    <h4 className="font-bold text-gray-900 dark:text-white text-lg group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{patient.full_name}</h4>
                                                     <p className="text-sm text-gray-500 dark:text-gray-400">{patient.age} yrs • {patient.gender}</p>
                                                 </div>
                                                 <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
@@ -423,7 +422,7 @@ ${medList || "None"}
                         ) : (
                             <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                 <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-100 dark:border-blue-500/20">
-                                    <h4 className="font-bold text-blue-900 dark:text-blue-300">Prescribing for: {selectedPatient.name}</h4>
+                                    <h4 className="font-bold text-blue-900 dark:text-blue-300">Prescribing for: {selectedPatient.full_name}</h4>
                                     <p className="text-sm text-blue-700 dark:text-blue-400">{selectedPatient.age} yrs • {selectedPatient.gender}</p>
                                 </div>
 
