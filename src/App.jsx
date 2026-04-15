@@ -22,7 +22,7 @@ import DoctorsList from "./pages/admin/DoctorsList";
 import StaffList from "./pages/admin/StaffList";
 import PatientsList from "./pages/admin/PatientsList";
 import Payroll from "./pages/admin/Payroll";
-import WorkersList from "./pages/admirkmn/WorkersList";
+import WorkersList from "./pages/admin/WorkersList";
 import HospitalSettings from "./pages/admin/HospitalSettings";
 import Billing from "./pages/receptionist/Billing";
 import WorkerAttendance from "./pages/receptionist/WorkerAttendance";
