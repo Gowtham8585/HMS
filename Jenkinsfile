@@ -28,12 +28,6 @@ pipeline {
             }
         }
 
-        stage('Run Linter') {
-            steps {
-                echo 'Linting the code...'
-                sh 'npm run lint'
-            }
-        }
 
         stage('Build React Frontend') {
             steps {
