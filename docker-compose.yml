@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # ------------------------------------------------------------------------------------------------
+  # DEVELOPMENT ENVIRONMENT
+  # Runs the Vite server with hot-reloading. 
+  # Usage: docker-compose up frontend-dev
+  # ------------------------------------------------------------------------------------------------
+  frontend-dev:
+    image: node:20-alpine
+    working_dir: /app
+    # Map the current directory to /app to enable hot-reloading
+    volumes:
+      - .:/app
+      - /app/node_modules # Prevent host node_modules from overwriting container node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      # Required for hot-reloading to work efficiently in Docker (especially on Windows)
+      - CHOKIDAR_USEPOLLING=true
+    # Install dependencies and start the Vite development server listening on all network interfaces
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    profiles: ["dev", "default"]
+
+  # ------------------------------------------------------------------------------------------------
+  # PRODUCTION ENVIRONMENT
+  # Builds the application and serves the static files using Nginx.
+  # Usage: docker-compose --profile prod up frontend-prod
+  # ------------------------------------------------------------------------------------------------
+  frontend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # To pass your Supabase key during build, uncomment and specify here or use a .env file.
+      # args:
+      #   - VITE_SUPABASE_KEY=${VITE_SUPABASE_KEY}
+    ports:
+      - "8080:80" # The app will be available on http://localhost:8080
+    profiles: ["prod"]

@@ -1,0 +1,29 @@
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+                 
+    # Run jenkins as root (simplifies permissions for testing, avoid in production!)                 
+    user: root 
+    
+    ports:
+      # Exposes Jenkins web interface on http://localhost:8081
+      - "8081:8080"
+      
+      # Exposes port for Jenkins agent connections
+      - "50000:50000"
+      
+    volumes:
+      # Persists Jenkins configurations and plugins locally
+      - jenkins_data:/var/jenkins_home
+      # Mounts your local project folder into the Jenkins container
+      - .:/app
+      # Grants Jenkins access to the Docker daemon to spin up isolated pods/containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      
+    environment:
+      # Suppresses initial setup wizard if you want it to jump straight in (optional)
+      # - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - TZ=Asia/Kolkata
+
+volumes:
+  jenkins_data:
