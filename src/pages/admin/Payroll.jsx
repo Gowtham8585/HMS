@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
-import { Wallet, Users, Stethoscope, Search, DollarSign, Edit, CheckCircle, XCircle, TrendingUp } from "lucide-react";
+import { Wallet, Users, Stethoscope, Search, DollarSign, Edit, CheckCircle, XCircle, TrendingUp, Briefcase } from "lucide-react";
 
 export default function Payroll() {
     const [doctors, setDoctors] = useState([]);
@@ -20,7 +20,7 @@ export default function Payroll() {
     async function loadData() {
         setLoading(true);
         // Load Doctors
-        const { data: docData } = await supabase.from('doctors').select('*').order('name');
+        const { data: docData } = await supabase.from('doctors').select('*').order('full_name');
         setDoctors(docData || []);
 
         // Load Staff (query dedicated staff table)
@@ -100,7 +100,7 @@ export default function Payroll() {
         activeTab === 'doctor' ? doctors :
             activeTab === 'worker' ? workers : staff
     ).filter(e =>
-        e.name?.toLowerCase().includes(search.toLowerCase())
+        (e.name || e.full_name)?.toLowerCase().includes(search.toLowerCase())
     );
 
     const calculateTotal = () => {
@@ -223,14 +223,15 @@ export default function Payroll() {
                                         ? (emp.specialization || 'Clinical Doctor')
                                         : (activeTab === 'worker' ? (emp.role || 'Support Worker') : 'Support Staff');
 
-                                    const displayName = emp.name?.startsWith('Dr.') ? emp.name : (activeTab === 'doctor' ? `Dr. ${emp.name}` : emp.name);
+                                    const employeeName = emp.name || emp.full_name || '';
+                                    const displayName = employeeName.startsWith('Dr.') ? employeeName : (activeTab === 'doctor' ? `Dr. ${employeeName}` : employeeName);
 
                                     return (
                                         <tr key={emp.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                                             <td className="p-6">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold border ${activeTab === 'doctor' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/20' : (activeTab === 'worker' ? 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-100 dark:border-orange-500/20' : 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-500/20')}`}>
-                                                        {emp.name?.charAt(0)}
+                                                        {employeeName.charAt(0)}
                                                     </div>
                                                     <div>
                                                         <span className="font-bold text-lg block leading-none text-gray-900 dark:text-white">{displayName}</span>
@@ -293,7 +294,7 @@ export default function Payroll() {
                             <form onSubmit={handleUpdateSalary} className="space-y-6">
                                 <div>
                                     <p className="text-sm font-bold opacity-40 mb-1 uppercase tracking-widest text-gray-500 dark:text-white">Employee Name</p>
-                                    <p className="text-xl font-black text-gray-900 dark:text-white">{editingEmployee.name?.startsWith('Dr.') ? editingEmployee.name : (editingEmployee.type === 'doctor' ? `Dr. ${editingEmployee.name}` : editingEmployee.name)}</p>
+                                    <p className="text-xl font-black text-gray-900 dark:text-white">{(editingEmployee.name || editingEmployee.full_name)?.startsWith('Dr.') ? (editingEmployee.name || editingEmployee.full_name) : (editingEmployee.type === 'doctor' ? `Dr. ${editingEmployee.name || editingEmployee.full_name}` : (editingEmployee.name || editingEmployee.full_name))}</p>
                                 </div>
                                 <div className="grid grid-cols-1 gap-4">
                                     <div>

@@ -77,7 +77,7 @@ export default function DoctorDashboard() {
                 appointment_date,
                 appointment_time,
                 status,
-                patients (id, full_name, age, gender)
+                patients (id, full_name, date_of_birth, gender)
             `)
                 .eq('doctor_id', doctorData.id)
                 .in('status', ['scheduled', 'pending']) // Show both scheduled and pending
@@ -102,7 +102,7 @@ export default function DoctorDashboard() {
         setPrescriptionNotes("");
 
         if (allPatients.length === 0) {
-            const { data } = await supabase.from('patients').select('id, full_name, age, gender').order('full_name');
+            const { data } = await supabase.from('patients').select('id, full_name, date_of_birth, gender').order('full_name');
             if (data) setAllPatients(data);
         }
         if (allMedicines.length === 0) {
@@ -249,11 +249,15 @@ ${medList || "None"}
             }
 
             // 3. Create completed appointment record
+            const currentTime = new Date();
+            const timeString = `${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
+
             const { data: appt, error: apptError } = await supabase.from('appointments').insert({
                 doctor_id: doctorProfileId,
                 patient_id: selectedPatient.id,
                 status: 'completed',
-                appointment_date: new Date().toISOString()
+                appointment_date: currentTime.toISOString().split('T')[0],
+                appointment_time: timeString
             }).select().single();
 
             if (apptError) throw apptError;
@@ -293,6 +297,16 @@ ${medList || "None"}
         } finally {
             setCreating(false);
         }
+    };
+
+    const calculateAge = (dob) => {
+        if (!dob) return 'N/A';
+        const today = new Date();
+        const birthDate = new Date(dob);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+        return age;
     };
 
     const filteredPatients = allPatients.filter(p =>
@@ -345,7 +359,7 @@ ${medList || "None"}
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">{app.patients?.full_name || "Unknown Patient"}</h3>
                                     <p className="text-gray-600 dark:text-gray-400 text-lg">
-                                        {app.patients?.age} yrs • {app.patients?.gender}
+                                        {calculateAge(app.patients?.date_of_birth)} yrs • {app.patients?.gender}
                                         <span className="mx-2 text-gray-300">|</span>
                                         {new Date(app.appointment_date).toDateString()}
                                     </p>
@@ -409,7 +423,7 @@ ${medList || "None"}
                                             >
                                                 <div>
                                                     <h4 className="font-bold text-gray-900 dark:text-white text-lg group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{patient.full_name}</h4>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{patient.age} yrs • {patient.gender}</p>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{calculateAge(patient.date_of_birth)} yrs • {patient.gender}</p>
                                                 </div>
                                                 <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
                                                     <Plus size={20} />
@@ -423,7 +437,7 @@ ${medList || "None"}
                             <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                 <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-100 dark:border-blue-500/20">
                                     <h4 className="font-bold text-blue-900 dark:text-blue-300">Prescribing for: {selectedPatient.full_name}</h4>
-                                    <p className="text-sm text-blue-700 dark:text-blue-400">{selectedPatient.age} yrs • {selectedPatient.gender}</p>
+                                    <p className="text-sm text-blue-700 dark:text-blue-400">{calculateAge(selectedPatient.date_of_birth)} yrs • {selectedPatient.gender}</p>
                                 </div>
 
                                 {/* Voice Notes */}

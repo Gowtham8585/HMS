@@ -8,6 +8,8 @@ services:
     user: root 
     
     ports:
+    # run this for jenkins
+      # docker compose -f docker-compose.jenkins.yml up -d
       # Exposes Jenkins web interface on http://localhost:8081
       - "8081:8080"
       
