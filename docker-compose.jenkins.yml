@@ -3,31 +3,29 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.jenkins
-                 
-    # Run jenkins as root (simplifies permissions for testing, avoid in production!)                 
-    user: root 
-    
+      # Keep network: host during build to ensure Node.js installs successfully
+      network: host
+
+    user: root
+
     ports:
-    # run this for jenkins
-      # docker compose -f docker-compose.jenkins.yml up -d
-      # Exposes Jenkins web interface on http://localhost:8081
+      # Return to the port you are familiar with
       - "8081:8080"
-      
-      # Exposes port for Jenkins agent connections
       - "50000:50000"
-      
+
     volumes:
-      # Persists Jenkins configurations and plugins locally
       - jenkins_data:/var/jenkins_home
-      # Mounts your local project folder into the Jenkins container
       - .:/app
-      # Grants Jenkins access to the Docker daemon to spin up isolated pods/containers
       - /var/run/docker.sock:/var/run/docker.sock
-      
+
     environment:
-      # Suppresses initial setup wizard if you want it to jump straight in (optional)
-      # - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
       - TZ=Asia/Kolkata
+
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    extra_hosts:
+      - "github.com:20.207.73.82"
 
 volumes:
   jenkins_data:

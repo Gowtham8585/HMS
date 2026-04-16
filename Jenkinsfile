@@ -1,33 +1,28 @@
 pipeline {
-    // This tells Jenkins to run inside an isolated Docker container for every build job.
-    // If multiple builds run at once, Jenkins creates separate containers/pods for each one!
-    agent {
-        docker {
-            image 'node:20'
-            args '-u root:root'
-        }
-    }
+    // We now use 'any' because Node.js is installed directly in our Jenkins image!
+    // This is much faster and more stable than spinning up a new container for every build.
+    agent any
 
     environment {
-        // You can define variables here, for example mapping Supabase keys
-        // To use real secrets, configure them in Jenkins Credentials and use credentials('CREDENTIAL_NAME')
         VITE_SUPABASE_KEY = 'your_build_time_key_here'
     }
 
     stages {
         stage('Initialize & Setup') {
             steps {
-                echo 'Accessing the locally mounted project directory...'
+                echo 'Cleaning up and preparing build environment...'
+                sh 'node -v'
+                sh 'npm -v'
             }
         }
 
         stage('Install Dependencies') {
             steps {
                 echo 'Installing Node Dependencies...'
+                // Use --frozen-lockfile or --no-audit for faster builds
                 sh 'npm install'
             }
         }
-
 
         stage('Build React Frontend') {
             steps {
@@ -37,12 +32,11 @@ pipeline {
         }
 
         stage('Docker Build & Deploy') {
-            // This stage is commented out by default because Jenkins needs Docker permissions to run this 
-            // (e.g. mapping /var/run/docker.sock to the Jenkins container)
             steps {
                 echo 'Building Docker container...'
                 /*
-                sh 'docker build --build-arg VITE_SUPABASE_KEY=${VITE_SUPABASE_KEY} -t hms-frontend-prod .'
+                // Example of how you would build the final prod image
+                sh 'docker build -t hms-frontend-prod .'
                 */
             }
         }
