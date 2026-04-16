@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+admin_pass.txt
+jenkins_logs.txt
+.env
+.env.local
