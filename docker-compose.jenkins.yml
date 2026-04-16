@@ -29,3 +29,10 @@ services:
 
 volumes:
   jenkins_data:
+
+# run this for jenkins
+# docker compose -f docker-compose.jenkins.yml up -d
+# docker compose -f docker-compose.jenkins.yml down
+
+# jenkins link
+# http://localhost:8081
