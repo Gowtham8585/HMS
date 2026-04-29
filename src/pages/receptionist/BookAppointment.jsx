@@ -34,11 +34,11 @@ export default function BookAppointment() {
         const load = async () => {
             // Fetch ONLY PERMANENT patients (with user_id)
             const { data: p } = await supabase.from('patients').select('id, full_name, email').not('user_id', 'is', null).order('full_name');
-            // Fetch doctors from PROFILES table
+            // Fetch doctors from DOCTORS table
             const { data: d } = await supabase
-                .from('profiles')
+                .from('doctors')
                 .select('id, specialization, full_name')
-                .eq('role', 'doctor')
+                .eq('is_active', true)
                 .order('full_name');
 
             if (p) {

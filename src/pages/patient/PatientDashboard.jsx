@@ -41,9 +41,9 @@ export default function PatientDashboard() {
             if (pid) {
                 // 2. Fetch related records using correct Patient UUID
                 const [appRes, billRes, prescRes] = await Promise.all([
-                    supabase.from('appointments').select('*, doctors:profiles(full_name, specialization)').eq('patient_id', pid).order('appointment_date', { ascending: false }).limit(5),
+                    supabase.from('appointments').select('*, doctors(full_name, specialization)').eq('patient_id', pid).order('appointment_date', { ascending: false }).limit(5),
                     supabase.from('bills').select('*').eq('patient_id', pid).order('created_at', { ascending: false }).limit(5),
-                    supabase.from('prescriptions').select('*, doctors:profiles(full_name), prescription_items(*, medicines(medicine_name))').eq('patient_id', pid).order('created_at', { ascending: false }).limit(10)
+                    supabase.from('prescriptions').select('*, doctors(full_name), prescription_items(*, medicines(medicine_name))').eq('patient_id', pid).order('created_at', { ascending: false }).limit(10)
                 ]);
 
                 if (appRes.data) setAppointments(appRes.data);
@@ -109,7 +109,7 @@ export default function PatientDashboard() {
     }, [showBookingModal]);
 
     const fetchDoctorsForBooking = async () => {
-        const { data } = await supabase.from('profiles').select('id, full_name, specialization').eq('role', 'doctor');
+        const { data } = await supabase.from('doctors').select('id, full_name, specialization').eq('is_active', true);
         if (data) {
             setBookingDoctors(data);
             if (data.length > 0 && !newBooking.doctor_id) {
